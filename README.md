@@ -25,5 +25,5 @@
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/YOUR_USERNAME/AutoCraft.git](https://github.com/YOUR_USERNAME/AutoCraft.git)
+git clone [https://github.com/hirunthakan432/AutoCraft.git](https://github.com/hirunthakan432/AutoCraft.git)
 cd AutoCraft
