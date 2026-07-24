@@ -16,44 +16,45 @@ class GeminiClient:
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
 
-    def generate_response(self, prompt: str, system_instruction: str = None) -> str:
-        """Generates a response using Gemini 3.5 Flash with fallback logic."""
+    def generate_chat_response(self, history: list, system_instruction: str = None) -> str:
+        """Generates a response preserving multi-turn conversation context."""
         config = None
         if system_instruction:
             config = types.GenerateContentConfig(
                 system_instruction=system_instruction,
             )
             
-        # Fallback cascade
-        models_to_try = [self.model_name, "gemini-3.0-flash", "gemini-2.5-flash"]
+        # Target Gemini 3 series models
+        models_to_try = [self.model_name, "gemini-3.0-flash"]
         
+        # Convert history format to GenAI SDK contents structure
+        contents = []
+        for msg in history:
+            role = "user" if msg["role"] == "user" else "model"
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])]
+                )
+            )
+
         for model in list(dict.fromkeys(models_to_try)):
             for attempt in range(2):
                 try:
                     response = self.client.models.generate_content(
                         model=model,
-                        contents=prompt,
+                        contents=contents,
                         config=config,
                     )
                     return response.text
                 except APIError as e:
                     err_str = str(e)
                     if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str:
-                        wait = (attempt + 1) * 3
-                        print(f"⚠️ {model} high demand / rate limit. Retrying in {wait}s...")
+                        wait = (attempt + 1) * 2
+                        print(f"\n⚠️ {model} busy or rate limited. Retrying in {wait}s...")
                         time.sleep(wait)
                     else:
-                        print(f"⚠️ Model {model} unavailable: {e}")
+                        print(f"\n⚠️ Error on {model}: {e}")
                         break
-                        
-            print(f"🔄 Switching to fallback model...")
 
-        raise RuntimeError("All configured Gemini models are currently busy or rate-limited.")
-
-if __name__ == "__main__":
-    ai = GeminiClient()
-    reply = ai.generate_response(
-        prompt="Write a 1-sentence tagline for AutoCraft.",
-        system_instruction="You are an expert AI software architect."
-    )
-    print("🤖 Gemini Response:\n", reply)
+        raise RuntimeError("Quota exceeded or models unavailable. Please wait a moment.")
