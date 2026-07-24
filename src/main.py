@@ -1,20 +1,21 @@
 import os
 from dotenv import load_dotenv
+from src.core.llm import GeminiClient
 
-# Load variables from .env
 load_dotenv()
 
 def main():
-    print("⚡ AutoCraft Agent Framework Initialized")
+    print("⚡ AutoCraft Agent Framework Initialized (Gemini Powered)")
     
-    # Quick sanity check for keys
-    openai_key = os.getenv("OPENAI_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    
-    if openai_key or gemini_key:
-        print("✅ Environment variables loaded successfully!")
-    else:
-        print("⚠️ Warning: No API keys found in .env file.")
+    try:
+        ai = GeminiClient()
+        response = ai.generate_response(
+            prompt="Hello! Verify that the AutoCraft framework setup is complete.",
+            system_instruction="You are AutoCraft, an intelligent AI software agent."
+        )
+        print("\n🤖 Gemini Agent Response:\n", response)
+    except Exception as e:
+        print(f"\n❌ Setup Check Failed: {e}")
 
 if __name__ == "__main__":
     main()
