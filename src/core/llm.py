@@ -5,6 +5,8 @@ from google.genai import types
 from google.genai.errors import APIError
 from dotenv import load_dotenv
 
+from src.tools.file_ops import list_files, read_file, write_file, run_command
+
 load_dotenv()
 
 class GeminiClient:
@@ -15,19 +17,19 @@ class GeminiClient:
         
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
+        
+        # Tools registry provided to Gemini
+        self.tools = [list_files, read_file, write_file, run_command]
 
     def generate_chat_response(self, history: list, system_instruction: str = None) -> str:
-        """Generates a response preserving multi-turn conversation context."""
-        config = None
-        if system_instruction:
-            config = types.GenerateContentConfig(
-                system_instruction=system_instruction,
-            )
+        """Generates a response with automatic native function/tool execution support."""
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            tools=self.tools,  # Enable tool function calling
+        ) if system_instruction else types.GenerateContentConfig(tools=self.tools)
             
-        # Target Gemini 3 series models
         models_to_try = [self.model_name, "gemini-3.0-flash"]
         
-        # Convert history format to GenAI SDK contents structure
         contents = []
         for msg in history:
             role = "user" if msg["role"] == "user" else "model"
