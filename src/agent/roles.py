@@ -53,12 +53,24 @@ RESEARCHER = AgentRole(
     ),
 )
 
+TESTER = AgentRole(
+    name="tester",
+    description="Proposes and validates automated tests",
+    system_instruction=(
+        "You are the Testing agent in AutoCraft. "
+        "Propose minimal pytest cases and a COMMAND: pytest … line. "
+        "Focus on regressions and edge cases."
+    ),
+)
+
 DEFAULT_ROLES: Dict[str, AgentRole] = {
     PLANNER.name: PLANNER,
     CODER.name: CODER,
     REVIEWER.name: REVIEWER,
     RESEARCHER.name: RESEARCHER,
+    TESTER.name: TESTER,
 }
 
 # Default collaboration pipeline order
 DEFAULT_PIPELINE = ("planner", "coder", "reviewer")
+FULL_PIPELINE = ("planner", "coder", "tester", "reviewer")
