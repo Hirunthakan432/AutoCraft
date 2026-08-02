@@ -15,30 +15,28 @@ AutoCraft can help with:
 
 - Project scaffolding
 - Code generation assistance
-- File operations
+- File operations (sandboxed)
 - Development workflow automation
 - AI-powered diagnostics
-
-The goal is to create a developer-focused AI assistant that can understand tasks and execute structured workflows.
 
 ---
 
 ## ✨ Features
 
 ### 🤖 AI Agent Engine
-- Gemini-powered AI assistant
-- Natural language task processing
-- Intelligent development workflows
+- Gemini-powered assistant (pluggable providers)
+- Unified conversation + fact memory
+- `AgentController` orchestration layer
 
 ### 🛠️ Tool System
-- Modular tool registry
-- File reading and writing support
-- Command execution framework
+- Modular tools with **ToolSandbox** allow-list
+- Workspace path isolation
+- Shell injection protection + blocked-command policy
 
 ### 🧩 Extensible Architecture
-- Add custom AI providers
-- Add new tools and plugins
-- Build specialized agents
+- `LLMProvider` abstraction (Gemini + Mock)
+- Plugin registry foundation
+- Custom tools and agents
 
 ---
 
@@ -47,9 +45,12 @@ The goal is to create a developer-focused AI assistant that can understand tasks
 ```text
 AutoCraft/
 ├── src/
-│   ├── core/
-│   │   └── llm.py
-│   ├── tools/
+│   ├── agent/          # AgentController
+│   ├── core/           # LLM client, unified memory
+│   ├── llm/            # Provider abstraction
+│   ├── security/       # ToolSandbox
+│   ├── tools/          # file_ops (workspace-safe)
+│   ├── cli.py
 │   └── main.py
 ├── tests/
 ├── requirements.txt
@@ -61,20 +62,11 @@ AutoCraft/
 
 ## ⚙️ Installation
 
-### 1. Clone the repository
-
 ```bash
 git clone https://github.com/Hirunthakan432/AutoCraft.git
 cd AutoCraft
-```
-
-### 2. Install dependencies
-
-```bash
 pip install -r requirements.txt
 ```
-
-### 3. Configure environment variables
 
 Create a `.env` file:
 
@@ -82,10 +74,17 @@ Create a `.env` file:
 GEMINI_API_KEY=your_api_key_here
 ```
 
-### 4. Run AutoCraft
+### Run
 
 ```bash
+# Smoke-test agent
 python -m src.main
+
+# Interactive CLI
+python -m src.cli
+
+# Tests
+pytest -v
 ```
 
 ---
@@ -96,13 +95,11 @@ python -m src.main
 User
  │
  ▼
-AutoCraft Agent
- │
- ├── LLM Provider
- │
- ├── Tool Registry
- │
- └── Automation Workflow Engine
+AgentController
+ ├── LLMProvider (Gemini / Mock)
+ ├── AgentMemory (history + facts)
+ ├── ToolSandbox → tools
+ └── Plugins
 ```
 
 ---
@@ -110,19 +107,19 @@ AutoCraft Agent
 ## 🛣️ Roadmap
 
 - [x] Gemini AI integration
-- [x] Tool registry system
-- [x] Agent startup workflow
+- [x] Tool registry + sandbox
+- [x] Unified agent memory
+- [x] AgentController workflow
+- [x] Multi-provider abstraction (Gemini + Mock)
+- [ ] OpenAI / local model providers
 - [ ] Multi-agent collaboration
-- [ ] Web dashboard
+- [ ] Web dashboard API
 - [ ] Plugin marketplace
-- [ ] Long-term memory system
 - [ ] Automated testing agent
 
 ---
 
 ## 🤝 Contributing
-
-Contributions, ideas, and improvements are welcome.
 
 1. Fork the repository
 2. Create a feature branch
