@@ -18,160 +18,93 @@
 | OpenAI / compatible APIs | ✅ |
 | Local models (Ollama, etc.) | ✅ |
 | Interactive CLI | ✅ |
+| **Web dashboard API** | ✅ |
 | Sandboxed tools (files + shell) | ✅ |
 | Unified memory (chat + facts) | ✅ |
 | Multi-provider factory | ✅ |
 | Plugin registry | 🚧 foundation |
-| Web dashboard | 📋 planned |
-
----
-
-## Features
-
-### Agent engine
-- **`AgentController`** — orchestrates LLM, memory, and tools in one place
-- **`AgentMemory`** — conversation history plus key/value facts (`remember` / `recall`)
-- **Providers** — Gemini, OpenAI, local (Ollama-compatible), and Mock
-
-### Secure tools
-- **ToolSandbox** allow-list — only registered tools can run
-- **Workspace isolation** — file paths cannot escape the project root
-- **Safe shell** — no `shell=True`; blocked patterns for dangerous commands
-
-### Developer experience
-- Interactive CLI with `/clear` and session memory
-- Pytest suite (memory, sandbox, controller, providers)
-- GitHub Actions CI on every push and PR
+| Multi-agent collaboration | 📋 planned |
 
 ---
 
 ## Quick start
 
-### 1. Clone & install
-
 ```bash
 git clone https://github.com/Hirunthakan432/AutoCraft.git
 cd AutoCraft
 pip install -r requirements.txt
-```
-
-### 2. Configure
-
-```bash
 cp .env.example .env
+# set GEMINI_API_KEY (or OPENAI_API_KEY / local URL)
 ```
 
-Pick a provider and set keys:
-
-```env
-AUTOCRAFT_PROVIDER=gemini   # gemini | openai | local | mock
-GEMINI_API_KEY=...
-# OPENAI_API_KEY=...
-# LOCAL_LLM_BASE_URL=http://127.0.0.1:11434/v1
-# LOCAL_LLM_MODEL=llama3.2
-```
-
-### 3. Run
+### CLI
 
 ```bash
-# Smoke-test
-python -m src.main
-
-# Interactive chat
-python -m src.cli
-
-# Offline mock (no API key)
-python -c "from src.agent.controller import create_agent; print(create_agent(use_mock=True).chat('hello'))"
-
-# Explicit provider
-python -c "from src.agent.controller import create_agent; print(create_agent(provider='openai').chat('hi'))"
-
-# Tests
-pytest -v
+python -m src.main          # smoke-test
+python -m src.cli           # interactive chat
+pytest -v                   # tests
 ```
+
+### Web dashboard
+
+```bash
+uvicorn src.api.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+Open **http://127.0.0.1:8000/** for the UI, or use the REST API:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Liveness + provider |
+| `GET` | `/api/providers` | Available backends |
+| `POST` | `/api/chat` | `{ "message", "session_id?", "provider?" }` |
+| `GET` | `/api/session/{id}` | History, tasks, tools |
+| `POST` | `/api/session/{id}/clear` | Clear chat history |
+| `DELETE` | `/api/session/{id}` | Drop session |
+
+Set `AUTOCRAFT_API_MOCK=1` to drive the UI without API keys.
 
 ---
 
 ## Architecture
 
 ```text
-User
+User (CLI / Browser)
  │
  ▼
-AgentController
+AgentController  ◄── FastAPI (src/api)
  ├── LLMProvider ── Gemini | OpenAI | Local | Mock
  ├── AgentMemory ── history + facts
  ├── ToolSandbox ── allow-list + command policy
- │       └── tools (list_files, read_file, write_file, run_command)
- └── Plugins (registry foundation)
-```
-
-### Layout
-
-```text
-AutoCraft/
-├── src/
-│   ├── agent/           # AgentController, create_agent()
-│   ├── core/            # GeminiClient, AgentMemory
-│   ├── llm/             # Providers + factory
-│   ├── security/        # ToolSandbox
-│   ├── tools/           # workspace-safe file_ops
-│   ├── plugins/         # PluginRegistry
-│   ├── cli.py
-│   └── main.py
-├── tests/
-├── .github/workflows/
-├── requirements.txt
-├── pyproject.toml
-└── .env.example
+ └── Plugins
 ```
 
 ---
 
 ## Providers
 
-| Name | Env | Notes |
-|------|-----|--------|
-| `gemini` | `GEMINI_API_KEY` | Default. Uses `google-genai` + tool calling |
-| `openai` | `OPENAI_API_KEY`, optional `OPENAI_MODEL` | Chat Completions API |
-| `local` | `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL` | Ollama / LM Studio / vLLM compatible |
-| `mock` | — | Offline tests |
-
-Switch with `AUTOCRAFT_PROVIDER` or `create_agent(provider="openai")`.
-
----
-
-## Usage examples
+| Name | Env |
+|------|-----|
+| `gemini` (default) | `GEMINI_API_KEY` |
+| `openai` | `OPENAI_API_KEY`, optional `OPENAI_MODEL` |
+| `local` | `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL` |
+| `mock` | — |
 
 ```python
 from src.agent.controller import create_agent
-
-agent = create_agent()  # AUTOCRAFT_PROVIDER or gemini
-print(agent.chat("List the top-level project files."))
-
-agent.memory.remember("goal", "ship phase 3")
-print(agent.memory.recall("goal"))
-```
-
-```python
-from src.agent.controller import AgentController
-from src.llm.provider import MockProvider
-from src.security.sandbox import ToolSandbox
-
-sandbox = ToolSandbox()
-sandbox.register("ping", lambda: "pong")
-agent = AgentController(llm=MockProvider(), sandbox=sandbox)
-assert agent.run_tool("ping") == "pong"
+agent = create_agent(provider="openai")
+print(agent.chat("hello"))
 ```
 
 ---
 
 ## Security notes
 
-- Tools only operate inside the process **workspace root**.
-- `run_command` uses `shlex.split` + `shell=False` and a blocked-command policy.
+- Tools only operate inside the process workspace root.
+- Shell runs without `shell=True` and with a blocked-command policy.
 - Unregistered tools are denied by `ToolSandbox`.
-- Never commit `.env` — it is gitignored.
+- Dashboard sessions are in-memory (single process); do not expose publicly without auth.
+- Never commit `.env`.
 
 ---
 
@@ -181,26 +114,21 @@ assert agent.run_tool("ping") == "pong"
 - [x] Tool registry + ToolSandbox
 - [x] Unified agent memory
 - [x] AgentController workflow
-- [x] Multi-provider abstraction (Gemini + Mock)
+- [x] Multi-provider abstraction
 - [x] OpenAI / local model providers
+- [x] Web dashboard API
 - [ ] Multi-agent collaboration
-- [ ] Web dashboard API
 - [ ] Plugin marketplace
 - [ ] Automated testing agent
+- [ ] Auth + persistent sessions for the API
 
 ---
 
 ## Contributing
 
-1. Fork the repository  
-2. Create a feature branch  
-3. Add tests for new behaviour  
-4. Open a pull request  
-
-CI must pass before merge.
-
----
+1. Fork → feature branch → tests → PR  
+2. CI must pass before merge
 
 ## License
 
-Released under the [MIT License](LICENSE).
+[MIT](LICENSE)
