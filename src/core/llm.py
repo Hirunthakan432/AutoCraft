@@ -5,41 +5,49 @@ from google.genai import types
 from google.genai.errors import APIError
 from dotenv import load_dotenv
 
-from src.tools.file_ops import list_files, read_file, write_file, run_command
+from src.security.sandbox import ToolSandbox, create_default_sandbox
 
 load_dotenv()
 
+
 class GeminiClient:
-    def __init__(self, model_name: str = "gemini-3.5-flash"):
+    def __init__(
+        self,
+        model_name: str = "gemini-3.5-flash",
+        sandbox: ToolSandbox | None = None,
+    ):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY is missing from environment variables.")
-        
+
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
-        
-        # Tools registry provided to Gemini
-        self.tools = [list_files, read_file, write_file, run_command]
+
+        # All tool calls go through the sandbox allow-list + command policy
+        self.sandbox = sandbox if sandbox is not None else create_default_sandbox()
+        self.tools = self.sandbox.wrapped_tools()
 
     def generate_chat_response(self, history: list, system_instruction: str = None) -> str:
         """Generates a response with automatic native function/tool execution support."""
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
-            tools=self.tools,  # Enable tool function calling
+            tools=self.tools,
         ) if system_instruction else types.GenerateContentConfig(tools=self.tools)
-            
-        models_to_try = [self.model_name, "gemini-3.0-flash"]
-        
+
+        # Prefer current stable models; avoid non-existent IDs such as gemini-3.0-flash
+        models_to_try = [self.model_name, "gemini-3.6-flash", "gemini-3-flash"]
+
         contents = []
         for msg in history:
             role = "user" if msg["role"] == "user" else "model"
             contents.append(
                 types.Content(
                     role=role,
-                    parts=[types.Part.from_text(text=msg["content"])]
+                    parts=[types.Part.from_text(text=msg["content"])],
                 )
             )
 
+        last_error = None
         for model in list(dict.fromkeys(models_to_try)):
             for attempt in range(2):
                 try:
@@ -48,8 +56,19 @@ class GeminiClient:
                         contents=contents,
                         config=config,
                     )
-                    return response.text
+                    # Guard against empty / tool-only responses
+                    text = getattr(response, "text", None)
+                    if text is not None and text.strip():
+                        return text
+                    # Fallback: try to extract from candidates if present
+                    if response.candidates:
+                        parts = response.candidates[0].content.parts
+                        texts = [p.text for p in parts if getattr(p, "text", None)]
+                        if texts:
+                            return "\n".join(texts)
+                    return "(No textual response returned by the model.)"
                 except APIError as e:
+                    last_error = e
                     err_str = str(e)
                     if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str:
                         wait = (attempt + 1) * 2
@@ -58,5 +77,11 @@ class GeminiClient:
                     else:
                         print(f"\n⚠️ Error on {model}: {e}")
                         break
+                except Exception as e:
+                    last_error = e
+                    print(f"\n⚠️ Unexpected error on {model}: {e}")
+                    break
 
-        raise RuntimeError("Quota exceeded or models unavailable. Please wait a moment.")
+        raise RuntimeError(
+            f"Quota exceeded or models unavailable. Last error: {last_error}"
+        )

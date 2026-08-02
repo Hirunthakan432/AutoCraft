@@ -1,26 +1,19 @@
 from dotenv import load_dotenv
-from src.core.llm import GeminiClient
+
+from src.agent.controller import create_agent
 
 load_dotenv()
 
 
 def main():
-    print("⚡ AutoCraft Agent Framework Initialized (Gemini Powered)")
+    print("⚡ AutoCraft Agent Framework Initialized")
 
     try:
-        ai = GeminiClient()
-
-        response = ai.generate_chat_response(
-            history=[
-                {
-                    "role": "user",
-                    "content": "Hello! Verify that the AutoCraft framework setup is complete."
-                }
-            ],
-            system_instruction="You are AutoCraft, an intelligent AI software agent for automated development workflows."
+        agent = create_agent()
+        response = agent.run(
+            "Hello! Verify that the AutoCraft framework setup is complete."
         )
-
-        print("\n🤖 Gemini Agent Response:\n", response)
+        print("\n🤖 Agent Response:\n", response)
 
     except Exception as error:
         print(f"\n❌ Setup Check Failed: {error}")
