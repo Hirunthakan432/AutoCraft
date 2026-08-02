@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from typing import Any, Dict, Optional
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -13,11 +13,12 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from src.agent.controller import AgentController, create_agent
+from src.agent.orchestrator import MultiAgentOrchestrator, create_team
 
 load_dotenv()
 
-# In-memory sessions (single-process dashboard; swap for Redis later)
 _sessions: Dict[str, AgentController] = {}
+_teams: Dict[str, MultiAgentOrchestrator] = {}
 
 
 class ChatRequest(BaseModel):
@@ -41,25 +42,51 @@ class SessionInfo(BaseModel):
     tools: list
 
 
+class TeamRunRequest(BaseModel):
+    goal: str = Field(..., min_length=1)
+    pipeline: Optional[List[str]] = Field(
+        None, description="Role order, e.g. [planner, coder, reviewer]"
+    )
+    provider: Optional[str] = None
+    team_id: Optional[str] = None
+
+
+def _use_mock() -> bool:
+    return os.getenv("AUTOCRAFT_API_MOCK", "").lower() in ("1", "true", "yes")
+
+
 def _get_or_create_agent(
     session_id: Optional[str] = None,
     provider: Optional[str] = None,
 ) -> tuple[str, AgentController]:
-    use_mock = os.getenv("AUTOCRAFT_API_MOCK", "").lower() in ("1", "true", "yes")
     if session_id and session_id in _sessions:
         return session_id, _sessions[session_id]
 
     sid = session_id or str(uuid.uuid4())
-    agent = create_agent(use_mock=use_mock, provider=provider)
+    agent = create_agent(use_mock=_use_mock(), provider=provider)
     _sessions[sid] = agent
     return sid, agent
+
+
+def _get_or_create_team(
+    team_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    pipeline: Optional[List[str]] = None,
+) -> tuple[str, MultiAgentOrchestrator]:
+    if team_id and team_id in _teams:
+        return team_id, _teams[team_id]
+
+    tid = team_id or str(uuid.uuid4())
+    team = create_team(use_mock=_use_mock(), provider=provider, pipeline=pipeline)
+    _teams[tid] = team
+    return tid, team
 
 
 def create_app() -> FastAPI:
     application = FastAPI(
         title="AutoCraft Dashboard API",
         description="Web API for the AutoCraft agent framework",
-        version="0.2.0",
+        version="0.3.0",
     )
 
     application.add_middleware(
@@ -76,6 +103,7 @@ def create_app() -> FastAPI:
             "status": "ok",
             "provider": os.getenv("AUTOCRAFT_PROVIDER", "gemini"),
             "sessions": len(_sessions),
+            "teams": len(_teams),
         }
 
     @application.get("/api/providers")
@@ -125,6 +153,26 @@ def create_app() -> FastAPI:
         del _sessions[session_id]
         return {"status": "deleted", "session_id": session_id}
 
+    # --- multi-agent -------------------------------------------------------
+
+    @application.get("/api/team/roles")
+    def team_roles() -> dict:
+        team = create_team(use_mock=True)
+        return {"roles": team.list_roles(), "default_pipeline": list(team.pipeline)}
+
+    @application.post("/api/team/run")
+    def team_run(body: TeamRunRequest) -> dict:
+        try:
+            tid, team = _get_or_create_team(body.team_id, body.provider, body.pipeline)
+            result = team.run(body.goal, pipeline=body.pipeline)
+            payload = result.to_dict()
+            payload["team_id"] = tid
+            return payload
+        except KeyError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
     @application.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
         return _DASHBOARD_HTML
@@ -143,19 +191,13 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <title>AutoCraft Dashboard</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --panel: #1a2332;
-      --border: #2d3a4f;
-      --text: #e7ecf3;
-      --muted: #8b9bb4;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --user: #1e3a5f;
-      --bot: #1a2e1a;
+      --bg: #0f1419; --panel: #1a2332; --border: #2d3a4f; --text: #e7ecf3;
+      --muted: #8b9bb4; --accent: #3b82f6; --accent-hover: #2563eb;
+      --user: #1e3a5f; --bot: #1a2e1a;
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      margin: 0; font-family: ui-sans-serif, system-ui, sans-serif;
       background: var(--bg); color: var(--text); min-height: 100vh;
       display: flex; flex-direction: column;
     }
@@ -203,6 +245,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     <h1>⚡ AutoCraft</h1>
     <span class="badge" id="status">connecting…</span>
     <span class="badge" id="session">no session</span>
+    <button type="button" class="secondary" id="teamBtn">Team run</button>
     <button type="button" class="secondary" id="clearBtn" style="margin-left:auto">Clear</button>
   </header>
   <main>
@@ -271,6 +314,30 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       }
     });
 
+    document.getElementById('teamBtn').addEventListener('click', async () => {
+      const goal = input.value.trim() || prompt('Team goal?');
+      if (!goal) return;
+      input.value = '';
+      addMsg('[team] ' + goal, 'user');
+      send.disabled = true;
+      try {
+        const r = await fetch('/api/team/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || r.statusText);
+        for (const s of j.steps || []) {
+          addMsg('[' + s.role + ']\n' + s.output, 'bot');
+        }
+      } catch (err) {
+        addMsg('Team error: ' + err.message, 'system');
+      } finally {
+        send.disabled = false;
+      }
+    });
+
     document.getElementById('clearBtn').addEventListener('click', async () => {
       if (!sessionId) { log.innerHTML = ''; return; }
       try {
@@ -284,7 +351,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 
     if (sessionId) setSession(sessionId);
     refreshHealth();
-    addMsg('Ready. Messages stay in your browser session.', 'system');
+    addMsg('Ready. Use Team run for planner → coder → reviewer.', 'system');
   </script>
 </body>
 </html>
