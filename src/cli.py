@@ -1,9 +1,9 @@
-import sys
 from src.core.llm import GeminiClient
 from src.core.memory import ConversationMemory
 
 SYSTEM_PROMPT = """You are AutoCraft, an intelligent AI software architecture & automation agent. 
 You provide concise, high-quality, and structured technical responses."""
+
 
 def run_cli():
     print("=" * 60)
@@ -31,14 +31,14 @@ def run_cli():
                 continue
 
             memory.add_user_message(user_input)
-            
+
             print("\nAutoCraft > ", end="", flush=True)
             response = ai.generate_chat_response(
                 history=memory.get_history(),
-                system_instruction=memory.system_instruction
+                system_instruction=memory.system_instruction,
             )
             print(response + "\n")
-            
+
             memory.add_agent_message(response)
 
         except KeyboardInterrupt:
@@ -46,6 +46,7 @@ def run_cli():
             break
         except Exception as e:
             print(f"\n❌ Error: {e}\n")
+
 
 if __name__ == "__main__":
     run_cli()
