@@ -1,31 +1,32 @@
-# Secret Keys & Environment
+# Environment
 .env
-.env.*
+.venv/
+venv/
+env/
 
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
-.venv/
-venv/
+.eggs/
+dist/
+build/
 
-# AI / Datasets / Models
-data/
-datasets/
-models/
-weights/
-embeddings/
-*.bin
-*.pt
-*.safetensors
-
-# Testing
+# Tools
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
+htmlcov/
+
+# AutoCraft runtime
+.autocraft/
 
 # IDE
-.vscode/
 .idea/
+.vscode/
+*.swp
 
 # OS
 .DS_Store

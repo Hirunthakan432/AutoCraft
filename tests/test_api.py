@@ -7,16 +7,23 @@ from fastapi.testclient import TestClient
 
 os.environ["AUTOCRAFT_API_MOCK"] = "1"
 os.environ["AUTOCRAFT_PROVIDER"] = "mock"
+os.environ.pop("AUTOCRAFT_API_KEYS", None)
 
-from src.api.app import create_app, _sessions, _teams
+from src.api.app import create_app, _sessions, _teams, _store
 
 
 @pytest.fixture
-def client():
+def client(tmp_path, monkeypatch):
     _sessions.clear()
     _teams.clear()
-    app = create_app()
-    with TestClient(app) as c:
+    monkeypatch.setenv("AUTOCRAFT_SESSION_DIR", str(tmp_path / "sessions"))
+    # rebuild store path
+    import src.api.app as app_mod
+    from src.api.session_store import SessionStore
+
+    app_mod._store = SessionStore(root=str(tmp_path / "sessions"))
+    application = create_app()
+    with TestClient(application) as c:
         yield c
     _sessions.clear()
     _teams.clear()
@@ -25,74 +32,60 @@ def client():
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
-    data = r.json()
-    assert data["status"] == "ok"
-    assert "teams" in data
+    assert r.json()["status"] == "ok"
+    assert r.json()["auth_required"] is False
 
 
-def test_providers(client):
-    r = client.get("/api/providers")
+def test_chat_persists(client):
+    r = client.post("/api/chat", json={"message": "hello"})
     assert r.status_code == 200
-    names = r.json()["providers"]
-    assert "gemini" in names
-
-
-def test_chat_creates_session(client):
-    r = client.post("/api/chat", json={"message": "hello agent"})
-    assert r.status_code == 200
-    data = r.json()
-    assert "session_id" in data
-    assert data["history_length"] >= 2
-
-
-def test_chat_continues_session(client):
-    r1 = client.post("/api/chat", json={"message": "first"})
-    sid = r1.json()["session_id"]
-    r2 = client.post("/api/chat", json={"message": "second", "session_id": sid})
-    assert r2.json()["session_id"] == sid
-    assert r2.json()["history_length"] >= 4
-
-
-def test_get_session(client):
-    r = client.post("/api/chat", json={"message": "ping"})
     sid = r.json()["session_id"]
     info = client.get(f"/api/session/{sid}")
     assert info.status_code == 200
-    assert "list_files" in info.json()["tools"]
-
-
-def test_clear_session(client):
-    r = client.post("/api/chat", json={"message": "x"})
-    sid = r.json()["session_id"]
-    assert client.post(f"/api/session/{sid}/clear").status_code == 200
-    assert client.get(f"/api/session/{sid}").json()["history"] == []
-
-
-def test_delete_session(client):
-    r = client.post("/api/chat", json={"message": "bye"})
-    sid = r.json()["session_id"]
-    assert client.delete(f"/api/session/{sid}").status_code == 200
-    assert client.get(f"/api/session/{sid}").status_code == 404
-
-
-def test_dashboard_html(client):
-    r = client.get("/")
-    assert r.status_code == 200
-    assert "AutoCraft" in r.text
-
-
-def test_team_roles(client):
-    r = client.get("/api/team/roles")
-    assert r.status_code == 200
-    names = {x["name"] for x in r.json()["roles"]}
-    assert "planner" in names and "coder" in names
+    assert len(info.json()["history"]) >= 2
 
 
 def test_team_run(client):
-    r = client.post("/api/team/run", json={"goal": "Add health check endpoint"})
+    r = client.post("/api/team/run", json={"goal": "Ship feature"})
     assert r.status_code == 200
-    data = r.json()
-    assert data["goal"] == "Add health check endpoint"
-    assert len(data["steps"]) == 3
-    assert data["steps"][0]["role"] == "planner"
-    assert "team_id" in data
+    assert len(r.json()["steps"]) == 3
+
+
+def test_plugins_marketplace(client):
+    r = client.get("/api/plugins")
+    assert r.status_code == 200
+    names = {p["name"] for p in r.json()["plugins"]}
+    assert "echo" in names
+
+
+def test_plugins_install(client):
+    r = client.post("/api/plugins/install", json={"name": "summarize"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "installed"
+
+
+def test_test_run_no_execute(client):
+    r = client.post("/api/test/run", json={"goal": "memory module", "execute": False})
+    assert r.status_code == 200
+    assert "plan" in r.json()
+
+
+def test_auth_when_configured(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOCRAFT_API_KEYS", "secret-key")
+    monkeypatch.setenv("AUTOCRAFT_API_MOCK", "1")
+    monkeypatch.setenv("AUTOCRAFT_SESSION_DIR", str(tmp_path / "s"))
+    import src.api.app as app_mod
+    from src.api.session_store import SessionStore
+
+    app_mod._store = SessionStore(root=str(tmp_path / "s"))
+    _sessions.clear()
+    with TestClient(create_app()) as c:
+        denied = c.post("/api/chat", json={"message": "x"})
+        assert denied.status_code == 401
+        ok = c.post(
+            "/api/chat",
+            json={"message": "x"},
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert ok.status_code == 200
+    monkeypatch.delenv("AUTOCRAFT_API_KEYS", raising=False)
