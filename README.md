@@ -15,10 +15,12 @@
 | Capability | Status |
 |------------|--------|
 | Gemini-powered agent | ✅ |
+| OpenAI / compatible APIs | ✅ |
+| Local models (Ollama, etc.) | ✅ |
 | Interactive CLI | ✅ |
 | Sandboxed tools (files + shell) | ✅ |
 | Unified memory (chat + facts) | ✅ |
-| Multi-provider abstraction | ✅ Gemini + Mock |
+| Multi-provider factory | ✅ |
 | Plugin registry | 🚧 foundation |
 | Web dashboard | 📋 planned |
 
@@ -29,12 +31,12 @@
 ### Agent engine
 - **`AgentController`** — orchestrates LLM, memory, and tools in one place
 - **`AgentMemory`** — conversation history plus key/value facts (`remember` / `recall`)
-- **Providers** — `GeminiProvider` for production, `MockProvider` for offline tests
+- **Providers** — Gemini, OpenAI, local (Ollama-compatible), and Mock
 
 ### Secure tools
 - **ToolSandbox** allow-list — only registered tools can run
 - **Workspace isolation** — file paths cannot escape the project root
-- **Safe shell** — no `shell=True`; blocked patterns for `rm -rf`, `sudo`, `curl\|bash`, etc.
+- **Safe shell** — no `shell=True`; blocked patterns for dangerous commands
 
 ### Developer experience
 - Interactive CLI with `/clear` and session memory
@@ -55,24 +57,34 @@ pip install -r requirements.txt
 
 ### 2. Configure
 
-Copy the example env file and add your key:
-
 ```bash
 cp .env.example .env
-# GEMINI_API_KEY=your_google_ai_api_key_here
+```
+
+Pick a provider and set keys:
+
+```env
+AUTOCRAFT_PROVIDER=gemini   # gemini | openai | local | mock
+GEMINI_API_KEY=...
+# OPENAI_API_KEY=...
+# LOCAL_LLM_BASE_URL=http://127.0.0.1:11434/v1
+# LOCAL_LLM_MODEL=llama3.2
 ```
 
 ### 3. Run
 
 ```bash
-# Smoke-test (calls Gemini)
+# Smoke-test
 python -m src.main
 
 # Interactive chat
 python -m src.cli
 
-# Offline mock agent (no API key)
+# Offline mock (no API key)
 python -c "from src.agent.controller import create_agent; print(create_agent(use_mock=True).chat('hello'))"
+
+# Explicit provider
+python -c "from src.agent.controller import create_agent; print(create_agent(provider='openai').chat('hi'))"
 
 # Tests
 pytest -v
@@ -87,7 +99,7 @@ User
  │
  ▼
 AgentController
- ├── LLMProvider ── GeminiProvider / MockProvider
+ ├── LLMProvider ── Gemini | OpenAI | Local | Mock
  ├── AgentMemory ── history + facts
  ├── ToolSandbox ── allow-list + command policy
  │       └── tools (list_files, read_file, write_file, run_command)
@@ -101,14 +113,14 @@ AutoCraft/
 ├── src/
 │   ├── agent/           # AgentController, create_agent()
 │   ├── core/            # GeminiClient, AgentMemory
-│   ├── llm/             # LLMProvider, Mock, Gemini adapter
+│   ├── llm/             # Providers + factory
 │   ├── security/        # ToolSandbox
 │   ├── tools/           # workspace-safe file_ops
 │   ├── plugins/         # PluginRegistry
-│   ├── cli.py           # Interactive session
-│   └── main.py          # Smoke-test entrypoint
+│   ├── cli.py
+│   └── main.py
 ├── tests/
-├── .github/workflows/   # Python CI
+├── .github/workflows/
 ├── requirements.txt
 ├── pyproject.toml
 └── .env.example
@@ -116,22 +128,30 @@ AutoCraft/
 
 ---
 
-## Usage examples
+## Providers
 
-### Programmatic agent
+| Name | Env | Notes |
+|------|-----|--------|
+| `gemini` | `GEMINI_API_KEY` | Default. Uses `google-genai` + tool calling |
+| `openai` | `OPENAI_API_KEY`, optional `OPENAI_MODEL` | Chat Completions API |
+| `local` | `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL` | Ollama / LM Studio / vLLM compatible |
+| `mock` | — | Offline tests |
+
+Switch with `AUTOCRAFT_PROVIDER` or `create_agent(provider="openai")`.
+
+---
+
+## Usage examples
 
 ```python
 from src.agent.controller import create_agent
 
-agent = create_agent()  # uses Gemini + default sandbox
+agent = create_agent()  # AUTOCRAFT_PROVIDER or gemini
 print(agent.chat("List the top-level project files."))
 
-# Facts persist for the session
 agent.memory.remember("goal", "ship phase 3")
 print(agent.memory.recall("goal"))
 ```
-
-### Custom sandbox / mock LLM
 
 ```python
 from src.agent.controller import AgentController
@@ -140,17 +160,15 @@ from src.security.sandbox import ToolSandbox
 
 sandbox = ToolSandbox()
 sandbox.register("ping", lambda: "pong")
-
 agent = AgentController(llm=MockProvider(), sandbox=sandbox)
 assert agent.run_tool("ping") == "pong"
-print(agent.chat("status check"))
 ```
 
 ---
 
 ## Security notes
 
-- Tools only operate inside the process **workspace root** (`cwd` at startup).
+- Tools only operate inside the process **workspace root**.
 - `run_command` uses `shlex.split` + `shell=False` and a blocked-command policy.
 - Unregistered tools are denied by `ToolSandbox`.
 - Never commit `.env` — it is gitignored.
@@ -164,7 +182,7 @@ print(agent.chat("status check"))
 - [x] Unified agent memory
 - [x] AgentController workflow
 - [x] Multi-provider abstraction (Gemini + Mock)
-- [ ] OpenAI / local model providers
+- [x] OpenAI / local model providers
 - [ ] Multi-agent collaboration
 - [ ] Web dashboard API
 - [ ] Plugin marketplace

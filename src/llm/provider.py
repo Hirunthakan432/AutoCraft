@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from typing import List, Optional
+
+import requests
 
 
 class LLMProvider(ABC):
@@ -84,3 +87,118 @@ class GeminiProvider(LLMProvider):
             history=history,
             system_instruction=system_instruction,
         )
+
+
+def _history_to_openai_messages(
+    history: List[dict],
+    system_instruction: Optional[str] = None,
+) -> List[dict]:
+    messages: List[dict] = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    for msg in history:
+        role = msg.get("role", "user")
+        # Map Gemini-style "model" role to OpenAI "assistant"
+        if role == "model":
+            role = "assistant"
+        messages.append({"role": role, "content": msg.get("content", "")})
+    return messages
+
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI Chat Completions API (also works with compatible proxies)."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "gpt-4o-mini",
+        base_url: str = "https://api.openai.com/v1",
+        timeout: int = 60,
+    ):
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY is missing from environment variables.")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+
+    def _chat(self, messages: List[dict]) -> str:
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {"model": self.model, "messages": messages}
+        resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+    def generate(self, prompt: str) -> str:
+        return self._chat([{"role": "user", "content": prompt}])
+
+    def generate_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> str:
+        messages = _history_to_openai_messages(history, system_instruction)
+        return self._chat(messages)
+
+
+class LocalProvider(LLMProvider):
+    """Local OpenAI-compatible server (e.g. Ollama at localhost:11434)."""
+
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout: int = 120,
+    ):
+        self.base_url = (
+            base_url
+            or os.getenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:11434/v1")
+        ).rstrip("/")
+        self.model = model or os.getenv("LOCAL_LLM_MODEL", "llama3.2")
+        self.timeout = timeout
+        # Optional key for proxies that require one
+        self.api_key = os.getenv("LOCAL_LLM_API_KEY", "ollama")
+
+    def _chat(self, messages: List[dict]) -> str:
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {"model": self.model, "messages": messages, "stream": False}
+        resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+    def generate(self, prompt: str) -> str:
+        return self._chat([{"role": "user", "content": prompt}])
+
+    def generate_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> str:
+        messages = _history_to_openai_messages(history, system_instruction)
+        return self._chat(messages)
+
+
+def create_provider(name: Optional[str] = None) -> LLMProvider:
+    """Build a provider from name or AUTOCRAFT_PROVIDER env (default: gemini)."""
+    key = (name or os.getenv("AUTOCRAFT_PROVIDER", "gemini")).strip().lower()
+    if key in ("mock", "test"):
+        return MockProvider()
+    if key in ("openai", "gpt"):
+        return OpenAIProvider()
+    if key in ("local", "ollama"):
+        return LocalProvider()
+    if key in ("gemini", "google"):
+        return GeminiProvider()
+    raise ValueError(
+        f"Unknown provider '{key}'. Use: gemini | openai | local | mock"
+    )

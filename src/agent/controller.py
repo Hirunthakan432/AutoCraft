@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from src.core.memory import AgentMemory
-from src.llm.provider import LLMProvider, MockProvider
+from src.llm.provider import LLMProvider, MockProvider, create_provider
 from src.security.sandbox import ToolSandbox, create_default_sandbox
 
 DEFAULT_SYSTEM = (
@@ -68,13 +68,15 @@ class AgentController:
 def create_agent(
     *,
     use_mock: bool = False,
+    provider: Optional[str] = None,
     system_instruction: Optional[str] = None,
 ) -> AgentController:
-    """Factory used by CLI / main entry points."""
+    """Factory used by CLI / main entry points.
+
+    Priority: use_mock → explicit provider name → AUTOCRAFT_PROVIDER env → gemini.
+    """
     if use_mock:
         llm: LLMProvider = MockProvider()
     else:
-        from src.llm.provider import GeminiProvider
-
-        llm = GeminiProvider()
+        llm = create_provider(provider)
     return AgentController(llm=llm, system_instruction=system_instruction)

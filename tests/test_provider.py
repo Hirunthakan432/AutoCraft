@@ -1,4 +1,15 @@
-from src.llm.provider import MockProvider, LLMProvider
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from src.llm.provider import (
+    LLMProvider,
+    MockProvider,
+    OpenAIProvider,
+    LocalProvider,
+    create_provider,
+    _history_to_openai_messages,
+)
 
 
 def test_mock_generate():
@@ -19,3 +30,57 @@ def test_mock_chat_uses_last_user():
 
 def test_mock_is_llm_provider():
     assert isinstance(MockProvider(), LLMProvider)
+
+
+def test_history_maps_model_to_assistant():
+    msgs = _history_to_openai_messages(
+        [{"role": "user", "content": "hi"}, {"role": "model", "content": "yo"}],
+        system_instruction="be brief",
+    )
+    assert msgs[0] == {"role": "system", "content": "be brief"}
+    assert msgs[2]["role"] == "assistant"
+
+
+def test_create_provider_mock():
+    assert isinstance(create_provider("mock"), MockProvider)
+
+
+def test_create_provider_unknown():
+    with pytest.raises(ValueError, match="Unknown provider"):
+        create_provider("nope")
+
+
+@patch("src.llm.provider.requests.post")
+def test_openai_provider_chat(mock_post):
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "choices": [{"message": {"content": "hello from openai"}}]
+    }
+    mock_post.return_value = mock_resp
+
+    p = OpenAIProvider(api_key="sk-test", model="gpt-4o-mini")
+    out = p.generate_chat_response(
+        [{"role": "user", "content": "hi"}],
+        system_instruction="sys",
+    )
+    assert out == "hello from openai"
+    assert mock_post.called
+    body = mock_post.call_args.kwargs["json"]
+    assert body["model"] == "gpt-4o-mini"
+    assert body["messages"][0]["role"] == "system"
+
+
+@patch("src.llm.provider.requests.post")
+def test_local_provider_chat(mock_post):
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "choices": [{"message": {"content": "hello from local"}}]
+    }
+    mock_post.return_value = mock_resp
+
+    p = LocalProvider(base_url="http://127.0.0.1:11434/v1", model="llama3.2")
+    assert p.generate("ping") == "hello from local"
+    url = mock_post.call_args.args[0]
+    assert url.endswith("/chat/completions")
