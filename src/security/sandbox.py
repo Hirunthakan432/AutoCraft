@@ -47,7 +47,9 @@ class ToolSandbox:
         blocked_patterns: Iterable[re.Pattern[str]] | None = None,
     ) -> None:
         self.allowed_tools: dict[str, Callable[..., Any]] = {}
-        self.blocked_patterns = tuple(blocked_patterns) if blocked_patterns is not None else BLOCKED_COMMAND_PATTERNS
+        self.blocked_patterns = (
+            tuple(blocked_patterns) if blocked_patterns is not None else BLOCKED_COMMAND_PATTERNS
+        )
 
     def register(self, name: str, tool: Callable[..., Any]) -> None:
         """Register a tool under an explicit name."""
@@ -91,8 +93,9 @@ class ToolSandbox:
     def wrap(self, name: str) -> Callable[..., Any]:
         """Return a Gemini-SDK-compatible wrapper that executes via this sandbox.
 
-        The wrapper keeps the original function's name and docstring so the
-        model can discover and call it correctly.
+        The wrapper uses the *registered* name (not the underlying callable's
+        __name__) so lambdas and renamed tools still expose a stable identity
+        to the model.
         """
         if name not in self.allowed_tools:
             raise KeyError(f"Tool '{name}' is not registered")
@@ -106,9 +109,11 @@ class ToolSandbox:
             except PermissionError as e:
                 return f"Sandbox denied: {e}"
 
-        # Ensure the SDK sees a stable tool name
-        sandboxed_tool.__name__ = original.__name__
-        sandboxed_tool.__doc__ = original.__doc__
+        # Prefer the registration name over original.__name__ (e.g. <lambda>)
+        sandboxed_tool.__name__ = name
+        sandboxed_tool.__qualname__ = name
+        if original.__doc__:
+            sandboxed_tool.__doc__ = original.__doc__
         return sandboxed_tool
 
     def wrapped_tools(self, names: Iterable[str] | None = None) -> list[Callable[..., Any]]:
