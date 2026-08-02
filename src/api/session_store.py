@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+_SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class SessionStore:
@@ -19,11 +22,12 @@ class SessionStore:
         self._lock = threading.Lock()
 
     def _path(self, session_id: str) -> Path:
-        # Prevent path traversal
-        safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
-        if not safe:
+        if not session_id or not _SAFE_ID.match(session_id):
             raise ValueError("Invalid session id")
-        return self.root / f"{safe}.json"
+        path = (self.root / f"{session_id}.json").resolve()
+        if not str(path).startswith(str(self.root)):
+            raise ValueError("Invalid session id")
+        return path
 
     def load(self, session_id: str) -> Optional[Dict[str, Any]]:
         path = self._path(session_id)
@@ -32,7 +36,12 @@ class SessionStore:
         with self._lock:
             return json.loads(path.read_text(encoding="utf-8"))
 
-    def save(self, session_id: str, history: List[dict], tasks: Optional[List[str]] = None) -> None:
+    def save(
+        self,
+        session_id: str,
+        history: List[dict],
+        tasks: Optional[List[str]] = None,
+    ) -> None:
         path = self._path(session_id)
         payload = {
             "session_id": session_id,

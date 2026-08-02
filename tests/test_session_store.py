@@ -1,5 +1,6 @@
 import tempfile
-from pathlib import Path
+
+import pytest
 
 from src.api.session_store import SessionStore
 
@@ -19,8 +20,9 @@ def test_save_load_delete():
 def test_rejects_bad_id():
     with tempfile.TemporaryDirectory() as tmp:
         store = SessionStore(root=tmp)
-        try:
+        with pytest.raises(ValueError):
             store.save("../evil", history=[])
-            assert False
-        except ValueError:
-            pass
+        with pytest.raises(ValueError):
+            store.save("a/b", history=[])
+        with pytest.raises(ValueError):
+            store.save("", history=[])

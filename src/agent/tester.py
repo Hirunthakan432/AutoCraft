@@ -34,8 +34,10 @@ class TestRunResult:
         }
 
 
-class TestingAgent:
+class TestingAgent:  # noqa: N801 - name is intentional product term
     """Plans tests with an LLM and optionally executes pytest in the sandbox."""
+
+    __test__ = False  # prevent pytest from collecting this as a test class
 
     def __init__(
         self,
@@ -75,21 +77,19 @@ class TestingAgent:
         passed: Optional[bool] = None
 
         if execute:
-            # Only allow pytest-related commands through the sandbox policy
             if not command.strip().startswith("pytest"):
                 notes.append("Refused non-pytest command; falling back to pytest -q")
                 command = "pytest -q"
             try:
-                output = self.run_pytest(command.replace("pytest", "", 1).strip() or "-q")
-                passed = "Exit Code: 0" in output or "\nExit Code: 0" in output
-                if "Exit Code:" in output:
-                    # parse exit code more carefully
-                    for part in output.splitlines():
-                        if part.startswith("Exit Code:"):
-                            try:
-                                passed = int(part.split(":", 1)[1].strip()) == 0
-                            except ValueError:
-                                pass
+                args = command.replace("pytest", "", 1).strip() or "-q"
+                output = self.run_pytest(args)
+                passed = None
+                for part in output.splitlines():
+                    if part.startswith("Exit Code:"):
+                        try:
+                            passed = int(part.split(":", 1)[1].strip()) == 0
+                        except ValueError:
+                            passed = False
             except Exception as e:
                 output = str(e)
                 notes.append("Execution error")
