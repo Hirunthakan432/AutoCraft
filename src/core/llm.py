@@ -5,13 +5,17 @@ from google.genai import types
 from google.genai.errors import APIError
 from dotenv import load_dotenv
 
-from src.tools.file_ops import list_files, read_file, write_file, run_command
+from src.security.sandbox import ToolSandbox, create_default_sandbox
 
 load_dotenv()
 
 
 class GeminiClient:
-    def __init__(self, model_name: str = "gemini-3.5-flash"):
+    def __init__(
+        self,
+        model_name: str = "gemini-3.5-flash",
+        sandbox: ToolSandbox | None = None,
+    ):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY is missing from environment variables.")
@@ -19,8 +23,9 @@ class GeminiClient:
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
 
-        # Tools registry provided to Gemini (automatic function calling enabled by SDK)
-        self.tools = [list_files, read_file, write_file, run_command]
+        # All tool calls go through the sandbox allow-list + command policy
+        self.sandbox = sandbox if sandbox is not None else create_default_sandbox()
+        self.tools = self.sandbox.wrapped_tools()
 
     def generate_chat_response(self, history: list, system_instruction: str = None) -> str:
         """Generates a response with automatic native function/tool execution support."""
