@@ -25,5 +25,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run tests
+        env:
+          PYTHONPATH: .
         run: |
-          if [ -d tests ]; then pytest; else echo "No tests directory yet"; fi
+          if [ -d tests ]; then pytest -v; else echo "No tests directory yet"; fi
