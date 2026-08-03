@@ -17,7 +17,7 @@ from typing import Any, Callable, Iterable
 BLOCKED_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        r"\brm\s+(-[a-zA-Z]*f|.*\s-rf|--force)",  # rm -rf / force deletes
+        r"\brm\s+(-[a-zA-Z]*[rf]|.*\s-[rf]|--force|--recursive)",  # rm -rf / recursive / force
         r"\bsudo\b",
         r"\bchmod\b",
         r"\bchown\b",
@@ -34,6 +34,9 @@ BLOCKED_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"\bkill\s+-9\b",
         r"\bpkill\b",
         r"\b:(){:|:&};:",  # fork bomb
+        r"\bformat\b",
+        r"\bfdisk\b",
+        r"\bparted\b",
     )
 )
 

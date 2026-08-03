@@ -9,11 +9,19 @@ from src.security.sandbox import ToolSandbox, create_default_sandbox
 
 load_dotenv()
 
+# Documented stable/fallback models (Aug 2026). Override with GEMINI_MODEL.
+_DEFAULT_MODEL = "gemini-3.6-flash"
+_FALLBACK_MODELS = (
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+)
+
 
 class GeminiClient:
     def __init__(
         self,
-        model_name: str = "gemini-3.5-flash",
+        model_name: str | None = None,
         sandbox: ToolSandbox | None = None,
     ):
         api_key = os.getenv("GEMINI_API_KEY")
@@ -21,7 +29,11 @@ class GeminiClient:
             raise ValueError("GEMINI_API_KEY is missing from environment variables.")
 
         self.client = genai.Client(api_key=api_key)
-        self.model_name = model_name
+        self.model_name = (
+            model_name
+            or os.getenv("GEMINI_MODEL")
+            or _DEFAULT_MODEL
+        )
 
         # All tool calls go through the sandbox allow-list + command policy
         self.sandbox = sandbox if sandbox is not None else create_default_sandbox()
@@ -34,8 +46,7 @@ class GeminiClient:
             tools=self.tools,
         ) if system_instruction else types.GenerateContentConfig(tools=self.tools)
 
-        # Prefer current stable models; avoid non-existent IDs such as gemini-3.0-flash
-        models_to_try = [self.model_name, "gemini-3.6-flash", "gemini-3-flash"]
+        models_to_try = [self.model_name, *_FALLBACK_MODELS]
 
         contents = []
         for msg in history:

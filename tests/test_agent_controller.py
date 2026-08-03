@@ -42,3 +42,14 @@ def test_create_agent_mock():
     agent = create_agent(use_mock=True)
     assert isinstance(agent.llm, MockProvider)
     assert isinstance(agent.memory, AgentMemory)
+
+
+def test_clear_session_clears_history_and_facts():
+    agent = AgentController(llm=MockProvider())
+    agent.chat("remember this")
+    assert agent.memory.get_history()
+    assert agent.memory.recall("tasks")
+    agent.clear_session()
+    assert agent.memory.get_history() == []
+    assert agent.memory.recall("tasks") == []
+    assert agent.memory.facts == {}

@@ -21,3 +21,10 @@ def test_run_pytest_via_sandbox():
     result = tester.run("run unit tests", execute=True)
     assert result.command_output  # sandbox produced output
     assert "Exit Code" in result.command_output
+
+
+def test_extract_pytest_args_variants():
+    assert TestingAgent._extract_pytest_args("pytest -q") == "-q"
+    assert TestingAgent._extract_pytest_args("python -m pytest -v tests/") == "-v tests/"
+    assert TestingAgent._extract_pytest_args("python3 -m pytest") == "-q"
+    assert TestingAgent._extract_pytest_args("rm -rf /") is None
