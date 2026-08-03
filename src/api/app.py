@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections import OrderedDict
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -21,8 +22,24 @@ from src.plugins.registry import create_default_registry
 
 load_dotenv()
 
-_sessions: Dict[str, AgentController] = {}
-_teams: Dict[str, MultiAgentOrchestrator] = {}
+
+def _max_sessions() -> int:
+    try:
+        return max(1, int(os.getenv("AUTOCRAFT_MAX_SESSIONS", "100")))
+    except ValueError:
+        return 100
+
+
+def _max_teams() -> int:
+    try:
+        return max(1, int(os.getenv("AUTOCRAFT_MAX_TEAMS", "50")))
+    except ValueError:
+        return 50
+
+
+# OrderedDict used as simple LRU: move_to_end on access; popitem(last=False) on overflow
+_sessions: OrderedDict[str, AgentController] = OrderedDict()
+_teams: OrderedDict[str, MultiAgentOrchestrator] = OrderedDict()
 _store = SessionStore()
 _plugins = create_default_registry()
 
@@ -85,6 +102,26 @@ def _persist_agent(session_id: str, agent: AgentController) -> None:
     )
 
 
+def _touch_session(session_id: str) -> None:
+    if session_id in _sessions:
+        _sessions.move_to_end(session_id)
+
+
+def _store_session(session_id: str, agent: AgentController) -> None:
+    _sessions[session_id] = agent
+    _sessions.move_to_end(session_id)
+    while len(_sessions) > _max_sessions():
+        # Evict least-recently-used; disk store still holds history
+        _sessions.popitem(last=False)
+
+
+def _store_team(team_id: str, team: MultiAgentOrchestrator) -> None:
+    _teams[team_id] = team
+    _teams.move_to_end(team_id)
+    while len(_teams) > _max_teams():
+        _teams.popitem(last=False)
+
+
 def _get_or_create_agent(
     session_id: Optional[str] = None,
     provider: Optional[str] = None,
@@ -93,13 +130,14 @@ def _get_or_create_agent(
         if not is_valid_session_id(session_id):
             raise HTTPException(status_code=400, detail="Invalid session id")
         if session_id in _sessions:
+            _touch_session(session_id)
             return session_id, _sessions[session_id]
 
     sid = session_id or str(uuid.uuid4())
     agent = create_agent(use_mock=_use_mock(), provider=provider)
     if session_id:
         _hydrate_agent(sid, agent)
-    _sessions[sid] = agent
+    _store_session(sid, agent)
     return sid, agent
 
 
@@ -109,10 +147,11 @@ def _get_or_create_team(
     pipeline: Optional[List[str]] = None,
 ) -> tuple[str, MultiAgentOrchestrator]:
     if team_id and team_id in _teams:
+        _teams.move_to_end(team_id)
         return team_id, _teams[team_id]
     tid = team_id or str(uuid.uuid4())
     team = create_team(use_mock=_use_mock(), provider=provider, pipeline=pipeline)
-    _teams[tid] = team
+    _store_team(tid, team)
     return tid, team
 
 
@@ -120,7 +159,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="AutoCraft Dashboard API",
         description="Web API for the AutoCraft agent framework",
-        version="0.4.1",
+        version="0.4.2",
     )
 
     raw_origins = os.getenv("AUTOCRAFT_CORS_ORIGINS", "*").strip()
@@ -176,21 +215,22 @@ def create_app() -> FastAPI:
         if not is_valid_session_id(session_id):
             raise HTTPException(status_code=400, detail="Invalid session id")
         agent = _sessions.get(session_id)
-        if agent is None:
-            data = _store.load(session_id)
-            if data is None:
-                raise HTTPException(status_code=404, detail="Session not found")
+        if agent is not None:
+            _touch_session(session_id)
             return SessionInfo(
                 session_id=session_id,
-                history=data.get("history") or [],
-                tasks=data.get("tasks") or [],
-                tools=[],
+                history=agent.memory.get_history(),
+                tasks=agent.memory.recall("tasks"),
+                tools=agent.sandbox.list_allowed(),
             )
+        data = _store.load(session_id)
+        if data is None:
+            raise HTTPException(status_code=404, detail="Session not found")
         return SessionInfo(
             session_id=session_id,
-            history=agent.memory.get_history(),
-            tasks=agent.memory.recall("tasks"),
-            tools=agent.sandbox.list_allowed(),
+            history=data.get("history") or [],
+            tasks=data.get("tasks") or [],
+            tools=[],
         )
 
     @application.post("/api/session/{session_id}/clear", dependencies=auth_dep)
