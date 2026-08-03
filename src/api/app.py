@@ -96,8 +96,12 @@ def _hydrate_agent(session_id: str, agent: AgentController) -> None:
         return
     agent.memory.history = list(data.get("history") or [])
     # Replace facts instead of appending (avoid duplicates on re-hydrate)
-    tasks = list(data.get("tasks") or [])
-    agent.memory.facts["tasks"] = tasks
+    facts = data.get("facts")
+    if isinstance(facts, dict) and facts:
+        agent.memory.facts = {k: list(v) for k, v in facts.items()}
+    else:
+        tasks = list(data.get("tasks") or [])
+        agent.memory.facts = {"tasks": tasks} if tasks else {}
 
 
 def _persist_agent(session_id: str, agent: AgentController) -> None:
@@ -105,6 +109,7 @@ def _persist_agent(session_id: str, agent: AgentController) -> None:
         session_id,
         history=agent.memory.get_history(),
         tasks=agent.memory.recall("tasks"),
+        facts=dict(agent.memory.facts),
     )
 
 
@@ -317,8 +322,11 @@ def create_app() -> FastAPI:
 
     @application.post("/api/plugins/disable", dependencies=auth_dep)
     def plugins_disable(body: PluginAction) -> dict:
-        _plugins.disable(body.name)
-        return {"status": "disabled", "plugin": body.name}
+        try:
+            _plugins.disable(body.name)
+            return {"status": "disabled", "plugin": body.name}
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     # --- Frontend (static site) -------------------------------------------
     if _FRONTEND_DIR.is_dir():
