@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="AutoCraft — AI agent framework dashboard" />
+  <title>AutoCraft</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo">⚡</span>
+        <div>
+          <strong>AutoCraft</strong>
+          <span class="brand-sub">Agent framework</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button type="button" class="nav-item active" data-view="chat">Chat</button>
+        <button type="button" class="nav-item" data-view="team">Team</button>
+        <button type="button" class="nav-item" data-view="test">Test agent</button>
+        <button type="button" class="nav-item" data-view="plugins">Plugins</button>
+        <button type="button" class="nav-item" data-view="settings">Settings</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="status-pill" id="statusPill">connecting…</div>
+        <div class="session-pill" id="sessionPill">no session</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- Chat -->
+      <section class="view active" id="view-chat">
+        <header class="view-header">
+          <h1>Chat</h1>
+          <div class="header-actions">
+            <select id="chatProvider" class="select" title="Provider override">
+              <option value="">Default provider</option>
+            </select>
+            <button type="button" class="btn ghost" id="clearChatBtn">Clear</button>
+          </div>
+        </header>
+        <div class="messages" id="chatLog"></div>
+        <form class="composer" id="chatForm">
+          <textarea id="chatInput" rows="1" placeholder="Message AutoCraft…" autocomplete="off"></textarea>
+          <button type="submit" class="btn primary" id="chatSend">Send</button>
+        </form>
+      </section>
+
+      <!-- Team -->
+      <section class="view" id="view-team">
+        <header class="view-header">
+          <h1>Multi-agent team</h1>
+          <p class="muted">Planner → Coder → Reviewer pipeline</p>
+        </header>
+        <form class="panel-form" id="teamForm">
+          <label>
+            Goal
+            <textarea id="teamGoal" rows="3" placeholder="e.g. Add rate limiting to the API"></textarea>
+          </label>
+          <div class="row">
+            <label class="grow">
+              Pipeline (comma-separated roles)
+              <input type="text" id="teamPipeline" placeholder="planner, coder, reviewer" />
+            </label>
+            <label>
+              Provider
+              <select id="teamProvider" class="select">
+                <option value="">Default</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit" class="btn primary" id="teamRun">Run team</button>
+        </form>
+        <div class="messages" id="teamLog"></div>
+      </section>
+
+      <!-- Test -->
+      <section class="view" id="view-test">
+        <header class="view-header">
+          <h1>Test agent</h1>
+          <p class="muted">Propose and optionally execute pytest plans</p>
+        </header>
+        <form class="panel-form" id="testForm">
+          <label>
+            What should we test?
+            <textarea id="testGoal" rows="3" placeholder="e.g. cover AgentMemory edge cases"></textarea>
+          </label>
+          <div class="row">
+            <label class="checkbox">
+              <input type="checkbox" id="testExecute" checked />
+              Execute pytest
+            </label>
+            <label>
+              Provider
+              <select id="testProvider" class="select">
+                <option value="">Default</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit" class="btn primary" id="testRun">Run test agent</button>
+        </form>
+        <div class="messages" id="testLog"></div>
+      </section>
+
+      <!-- Plugins -->
+      <section class="view" id="view-plugins">
+        <header class="view-header">
+          <h1>Plugin marketplace</h1>
+          <button type="button" class="btn ghost" id="refreshPlugins">Refresh</button>
+        </header>
+        <div class="plugin-grid" id="pluginGrid"></div>
+      </section>
+
+      <!-- Settings -->
+      <section class="view" id="view-settings">
+        <header class="view-header">
+          <h1>Settings</h1>
+        </header>
+        <form class="panel-form" id="settingsForm">
+          <label>
+            API key <span class="muted">(X-API-Key when auth is enabled)</span>
+            <input type="password" id="apiKeyInput" placeholder="dev-key-1" autocomplete="off" />
+          </label>
+          <label>
+            API base URL <span class="muted">(leave empty for same origin)</span>
+            <input type="text" id="apiBaseInput" placeholder="http://127.0.0.1:8000" />
+          </label>
+          <div class="row">
+            <button type="submit" class="btn primary">Save</button>
+            <button type="button" class="btn ghost" id="pingBtn">Ping /health</button>
+          </div>
+          <pre class="code-block" id="healthOut">—</pre>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

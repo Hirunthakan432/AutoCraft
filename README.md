@@ -44,7 +44,7 @@ python -m src.cli      # interactive chat
 pytest -v              # test suite
 ```
 
-### Web dashboard
+### Web dashboard (frontend site)
 
 ```bash
 uvicorn src.api.app:app --reload --host 0.0.0.0 --port 8000
@@ -52,9 +52,15 @@ uvicorn src.api.app:app --reload --host 0.0.0.0 --port 8000
 
 Open **http://127.0.0.1:8000/**
 
-- **Send** — single-agent chat  
-- **Team** — planner → coder → reviewer  
-- **Test agent** — propose + run pytest  
+The UI lives in `frontend/` and is served by FastAPI:
+
+| View | Features |
+|------|----------|
+| **Chat** | Multi-turn agent chat, provider override, clear session |
+| **Team** | Multi-agent pipeline (planner → coder → reviewer) |
+| **Test agent** | Propose + optionally run pytest |
+| **Plugins** | Marketplace install / enable / disable |
+| **Settings** | API key, base URL, health ping |
 
 Offline UI without cloud keys:
 
@@ -70,7 +76,7 @@ AUTOCRAFT_API_MOCK=1
 User (CLI / Browser)
         │
         ▼
-   FastAPI (src/api)
+   FastAPI (src/api)  +  frontend/ (static site)
         │
         ▼
  AgentController / MultiAgentOrchestrator / TestingAgent
@@ -84,6 +90,10 @@ User (CLI / Browser)
 
 ```text
 AutoCraft/
+├── frontend/           # Web dashboard (HTML/CSS/JS)
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
 ├── src/
 │   ├── agent/          # controller, roles, orchestrator, tester
 │   ├── api/            # FastAPI app, auth, session store
@@ -106,7 +116,7 @@ AutoCraft/
 
 | Name | Configuration |
 |------|----------------|
-| `gemini` (default) | `GEMINI_API_KEY` |
+| `gemini` (default) | `GEMINI_API_KEY`, optional `GEMINI_MODEL` |
 | `openai` | `OPENAI_API_KEY`, optional `OPENAI_MODEL` |
 | `local` | `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL` |
 | `mock` | no key (tests / offline) |
@@ -198,7 +208,8 @@ print(reg.run("summarize", "line one\nline two"))
 | `POST` | `/api/plugins/install` | Install plugin |
 | `POST` | `/api/plugins/enable` | Enable plugin |
 | `POST` | `/api/plugins/disable` | Disable plugin |
-| `GET` | `/` | Chat UI |
+| `GET` | `/` | Frontend dashboard |
+| `GET` | `/static/*` | Frontend assets |
 
 ### Auth & sessions
 
@@ -217,7 +228,7 @@ curl -X POST http://127.0.0.1:8000/api/chat \
   -d '{"message": "hello"}'
 ```
 
-In the browser UI, set `localStorage.autocraft_api_key` if auth is enabled.
+In the browser UI, open **Settings** to set the API key (stored in `localStorage`).
 
 ---
 
@@ -240,6 +251,7 @@ In the browser UI, set `localStorage.autocraft_api_key` if auth is enabled.
 - [x] AgentController workflow
 - [x] Multi-provider abstraction (Gemini + OpenAI + local + Mock)
 - [x] Web dashboard API
+- [x] Frontend site (chat / team / test / plugins)
 - [x] Multi-agent collaboration
 - [x] Plugin marketplace
 - [x] Automated testing agent
