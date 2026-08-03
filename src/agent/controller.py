@@ -69,7 +69,8 @@ class AgentController:
         return result if isinstance(result, str) else str(result)
 
     def clear_session(self) -> None:
-        self.memory.clear_history()
+        """Clear conversation history and long-term facts for this session."""
+        self.memory.clear()
 
 
 def create_agent(

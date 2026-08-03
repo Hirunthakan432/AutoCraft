@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -13,6 +14,12 @@ TESTER_SYSTEM = (
     "Given a goal or code change description, propose a minimal pytest plan: "
     "list test cases, suggested file names, and exact pytest command. "
     "Be concise."
+)
+
+# Accept "pytest ..." or "python -m pytest ..." (optional path prefix).
+_PYTEST_CMD = re.compile(
+    r"^(?:python(?:3)?\s+-m\s+)?pytest\b(.*)$",
+    re.IGNORECASE,
 )
 
 
@@ -64,6 +71,14 @@ class TestingAgent:  # noqa: N801 - name is intentional product term
         cmd = f"pytest {args}".strip()
         return str(self.sandbox.execute("run_command", cmd))
 
+    @staticmethod
+    def _extract_pytest_args(command: str) -> Optional[str]:
+        """Return pytest args if command is a pytest invocation, else None."""
+        match = _PYTEST_CMD.match(command.strip())
+        if not match:
+            return None
+        return (match.group(1) or "").strip() or "-q"
+
     def run(self, goal: str, *, execute: bool = True) -> TestRunResult:
         plan = self.plan(goal)
         command = "pytest -q"
@@ -77,11 +92,15 @@ class TestingAgent:  # noqa: N801 - name is intentional product term
         passed: Optional[bool] = None
 
         if execute:
-            if not command.strip().startswith("pytest"):
+            args = self._extract_pytest_args(command)
+            if args is None:
                 notes.append("Refused non-pytest command; falling back to pytest -q")
                 command = "pytest -q"
+                args = "-q"
+            else:
+                # Normalize stored command for display
+                command = f"pytest {args}".strip()
             try:
-                args = command.replace("pytest", "", 1).strip() or "-q"
                 output = self.run_pytest(args)
                 passed = None
                 for part in output.splitlines():

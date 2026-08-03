@@ -4,18 +4,21 @@ import subprocess
 from pathlib import Path
 from typing import List
 
-# Restrict all file and command operations to the project workspace.
-WORKSPACE_ROOT = Path(os.getcwd()).resolve()
+
+def _workspace_root() -> Path:
+    """Resolve workspace at call time so cwd changes are respected."""
+    return Path(os.getcwd()).resolve()
 
 
 def _safe_path(path: str) -> Path:
     """Resolve path and ensure it stays inside the workspace."""
-    candidate = (WORKSPACE_ROOT / path).resolve()
+    root = _workspace_root()
+    candidate = (root / path).resolve()
     try:
-        candidate.relative_to(WORKSPACE_ROOT)
+        candidate.relative_to(root)
     except ValueError as e:
         raise PermissionError(
-            f"Path '{path}' is outside the allowed workspace ({WORKSPACE_ROOT})."
+            f"Path '{path}' is outside the allowed workspace ({root})."
         ) from e
     return candidate
 
@@ -73,7 +76,7 @@ def run_command(command: str) -> str:
         result = subprocess.run(
             args,
             shell=False,
-            cwd=str(WORKSPACE_ROOT),
+            cwd=str(_workspace_root()),
             capture_output=True,
             text=True,
             timeout=30,
