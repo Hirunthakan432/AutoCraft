@@ -2,17 +2,17 @@
 
 from pathlib import Path
 
-from src.tools.file_ops import WORKSPACE_ROOT, _safe_path
+from src.tools.file_ops import _safe_path, _workspace_root
 
 
 def test_safe_path_allows_inside():
     p = _safe_path(".")
-    assert p == WORKSPACE_ROOT
+    assert p == _workspace_root()
 
 
-def test_safe_path_blocks_escape(monkeypatch):
+def test_safe_path_blocks_escape():
     # relative_to rejects paths outside workspace
-    outside = str(Path(WORKSPACE_ROOT).anchor)  # e.g. "/" or "C:\\"
+    outside = str(Path(_workspace_root()).anchor)  # e.g. "/" or "C:\\"
     try:
         _safe_path(outside)
         # On some systems joining "/" may still resolve under root differently;
