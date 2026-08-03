@@ -5,12 +5,14 @@ from __future__ import annotations
 import os
 import uuid
 from collections import OrderedDict
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.agent.controller import AgentController, create_agent
@@ -21,6 +23,10 @@ from src.api.session_store import SessionStore, is_valid_session_id
 from src.plugins.registry import create_default_registry
 
 load_dotenv()
+
+# Repo root: src/api/app.py → parents[2] == project root
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_FRONTEND_DIR = _PROJECT_ROOT / "frontend"
 
 
 def _max_sessions() -> int:
@@ -159,7 +165,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="AutoCraft Dashboard API",
         description="Web API for the AutoCraft agent framework",
-        version="0.4.2",
+        version="0.5.0",
     )
 
     raw_origins = os.getenv("AUTOCRAFT_CORS_ORIGINS", "*").strip()
@@ -314,194 +320,30 @@ def create_app() -> FastAPI:
         _plugins.disable(body.name)
         return {"status": "disabled", "plugin": body.name}
 
-    @application.get("/", response_class=HTMLResponse)
-    def dashboard() -> str:
-        return _DASHBOARD_HTML
+    # --- Frontend (static site) -------------------------------------------
+    if _FRONTEND_DIR.is_dir():
+        application.mount(
+            "/static",
+            StaticFiles(directory=str(_FRONTEND_DIR)),
+            name="static",
+        )
+
+        @application.get("/")
+        def dashboard() -> FileResponse:
+            index = _FRONTEND_DIR / "index.html"
+            if not index.is_file():
+                raise HTTPException(status_code=404, detail="Frontend not found")
+            return FileResponse(index)
+    else:
+
+        @application.get("/")
+        def dashboard_missing() -> dict:
+            return {
+                "error": "Frontend not installed",
+                "hint": "Expected frontend/ directory at project root",
+            }
 
     return application
 
 
 app = create_app()
-
-
-_DASHBOARD_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AutoCraft Dashboard</title>
-  <style>
-    :root {
-      --bg: #0f1419; --panel: #1a2332; --border: #2d3a4f; --text: #e7ecf3;
-      --muted: #8b9bb4; --accent: #3b82f6; --accent-hover: #2563eb;
-      --user: #1e3a5f; --bot: #1a2e1a;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; font-family: ui-sans-serif, system-ui, sans-serif;
-      background: var(--bg); color: var(--text); min-height: 100vh;
-      display: flex; flex-direction: column;
-    }
-    header {
-      padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-    }
-    header h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
-    header .badge {
-      font-size: 0.75rem; color: var(--muted); background: var(--panel);
-      padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--border);
-    }
-    main { flex: 1; display: flex; flex-direction: column; max-width: 800px;
-           width: 100%; margin: 0 auto; padding: 1rem; }
-    #log {
-      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;
-      padding-bottom: 1rem; min-height: 50vh;
-    }
-    .msg {
-      padding: 0.75rem 1rem; border-radius: 12px; max-width: 90%;
-      white-space: pre-wrap; line-height: 1.45; font-size: 0.95rem;
-    }
-    .msg.user { align-self: flex-end; background: var(--user); }
-    .msg.bot { align-self: flex-start; background: var(--bot); border: 1px solid var(--border); }
-    .msg.system { align-self: center; color: var(--muted); font-size: 0.8rem; }
-    form {
-      display: flex; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);
-    }
-    input[type=text] {
-      flex: 1; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--panel); color: var(--text); font-size: 1rem;
-    }
-    button {
-      padding: 0.75rem 1rem; border: none; border-radius: 10px;
-      background: var(--accent); color: white; font-weight: 600; cursor: pointer;
-    }
-    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--muted); }
-    button:disabled { opacity: 0.5; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>⚡ AutoCraft</h1>
-    <span class="badge" id="status">connecting…</span>
-    <span class="badge" id="session">no session</span>
-    <button type="button" class="secondary" id="teamBtn">Team</button>
-    <button type="button" class="secondary" id="testBtn">Test agent</button>
-    <button type="button" class="secondary" id="clearBtn" style="margin-left:auto">Clear</button>
-  </header>
-  <main>
-    <div id="log"></div>
-    <form id="form">
-      <input type="text" id="input" placeholder="Ask AutoCraft…" autocomplete="off" />
-      <button type="submit" id="send">Send</button>
-    </form>
-  </main>
-  <script>
-    let sessionId = localStorage.getItem('autocraft_session') || null;
-    const apiKey = localStorage.getItem('autocraft_api_key') || '';
-    const log = document.getElementById('log');
-    const form = document.getElementById('form');
-    const input = document.getElementById('input');
-    const send = document.getElementById('send');
-
-    function headers() {
-      const h = { 'Content-Type': 'application/json' };
-      if (apiKey) h['X-API-Key'] = apiKey;
-      return h;
-    }
-    function formatError(j, statusText) {
-      if (!j) return statusText || 'Request failed';
-      const d = j.detail;
-      if (typeof d === 'string') return d;
-      if (Array.isArray(d)) return d.map(x => x.msg || JSON.stringify(x)).join('; ');
-      if (d != null) return JSON.stringify(d);
-      return statusText || 'Request failed';
-    }
-    function addMsg(text, role) {
-      const d = document.createElement('div');
-      d.className = 'msg ' + role;
-      d.textContent = text;
-      log.appendChild(d);
-      log.scrollTop = log.scrollHeight;
-    }
-    function setSession(id) {
-      sessionId = id;
-      if (id) localStorage.setItem('autocraft_session', id);
-      document.getElementById('session').textContent = id ? ('session ' + id.slice(0, 8) + '…') : 'no session';
-    }
-    async function refreshHealth() {
-      try {
-        const j = await (await fetch('/health')).json();
-        document.getElementById('status').textContent =
-          j.status + ' · ' + j.provider + (j.auth_required ? ' · auth' : '');
-      } catch (e) {
-        document.getElementById('status').textContent = 'offline';
-      }
-    }
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const message = input.value.trim();
-      if (!message) return;
-      input.value = '';
-      addMsg(message, 'user');
-      send.disabled = true;
-      try {
-        const r = await fetch('/api/chat', {
-          method: 'POST', headers: headers(),
-          body: JSON.stringify({ message, session_id: sessionId }),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(formatError(j, r.statusText));
-        setSession(j.session_id);
-        addMsg(j.response, 'bot');
-      } catch (err) {
-        addMsg('Error: ' + err.message, 'system');
-      } finally {
-        send.disabled = false; input.focus();
-      }
-    });
-    document.getElementById('teamBtn').addEventListener('click', async () => {
-      const goal = input.value.trim() || prompt('Team goal?');
-      if (!goal) return;
-      input.value = '';
-      addMsg('[team] ' + goal, 'user');
-      try {
-        const r = await fetch('/api/team/run', {
-          method: 'POST', headers: headers(), body: JSON.stringify({ goal }),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(formatError(j, r.statusText));
-        for (const s of j.steps || []) addMsg('[' + s.role + ']\n' + s.output, 'bot');
-      } catch (err) {
-        addMsg('Team error: ' + err.message, 'system');
-      }
-    });
-    document.getElementById('testBtn').addEventListener('click', async () => {
-      const goal = input.value.trim() || prompt('What should we test?');
-      if (!goal) return;
-      input.value = '';
-      addMsg('[test] ' + goal, 'user');
-      try {
-        const r = await fetch('/api/test/run', {
-          method: 'POST', headers: headers(),
-          body: JSON.stringify({ goal, execute: true }),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(formatError(j, r.statusText));
-        addMsg(j.plan + '\n\n' + j.command + '\n' + (j.command_output || ''), 'bot');
-      } catch (err) {
-        addMsg('Test error: ' + err.message, 'system');
-      }
-    });
-    document.getElementById('clearBtn').addEventListener('click', async () => {
-      if (!sessionId) { log.innerHTML = ''; return; }
-      await fetch('/api/session/' + sessionId + '/clear', { method: 'POST', headers: headers() });
-      log.innerHTML = '';
-      addMsg('Session cleared.', 'system');
-    });
-    if (sessionId) setSession(sessionId);
-    refreshHealth();
-    addMsg('Ready. Team / Test agent available. Set localStorage autocraft_api_key if auth is on.', 'system');
-  </script>
-</body>
-</html>
-"""
