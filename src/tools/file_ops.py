@@ -11,10 +11,12 @@ WORKSPACE_ROOT = Path(os.getcwd()).resolve()
 def _safe_path(path: str) -> Path:
     """Resolve path and ensure it stays inside the workspace."""
     candidate = (WORKSPACE_ROOT / path).resolve()
-    if not str(candidate).startswith(str(WORKSPACE_ROOT)):
+    try:
+        candidate.relative_to(WORKSPACE_ROOT)
+    except ValueError as e:
         raise PermissionError(
             f"Path '{path}' is outside the allowed workspace ({WORKSPACE_ROOT})."
-        )
+        ) from e
     return candidate
 
 
@@ -64,7 +66,6 @@ def write_file(file_path: str, content: str) -> str:
 def run_command(command: str) -> str:
     """Runs a shell command safely within the current workspace (no shell injection)."""
     try:
-        # Prefer argument list over shell=True to avoid injection.
         args: List[str] = shlex.split(command)
         if not args:
             return "Error: Empty command."

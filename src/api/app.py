@@ -16,8 +16,8 @@ from src.agent.controller import AgentController, create_agent
 from src.agent.orchestrator import MultiAgentOrchestrator, create_team
 from src.agent.tester import TestingAgent
 from src.api.auth import api_keys_configured, require_api_key
-from src.api.session_store import SessionStore
-from src.plugins.registry import PluginRegistry, create_default_registry
+from src.api.session_store import SessionStore, is_valid_session_id
+from src.plugins.registry import create_default_registry
 
 load_dotenv()
 
@@ -72,8 +72,9 @@ def _hydrate_agent(session_id: str, agent: AgentController) -> None:
     if not data:
         return
     agent.memory.history = list(data.get("history") or [])
-    for t in data.get("tasks") or []:
-        agent.memory.remember("tasks", t)
+    # Replace facts instead of appending (avoid duplicates on re-hydrate)
+    tasks = list(data.get("tasks") or [])
+    agent.memory.facts["tasks"] = tasks
 
 
 def _persist_agent(session_id: str, agent: AgentController) -> None:
@@ -88,8 +89,11 @@ def _get_or_create_agent(
     session_id: Optional[str] = None,
     provider: Optional[str] = None,
 ) -> tuple[str, AgentController]:
-    if session_id and session_id in _sessions:
-        return session_id, _sessions[session_id]
+    if session_id is not None:
+        if not is_valid_session_id(session_id):
+            raise HTTPException(status_code=400, detail="Invalid session id")
+        if session_id in _sessions:
+            return session_id, _sessions[session_id]
 
     sid = session_id or str(uuid.uuid4())
     agent = create_agent(use_mock=_use_mock(), provider=provider)
@@ -116,13 +120,17 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="AutoCraft Dashboard API",
         description="Web API for the AutoCraft agent framework",
-        version="0.4.0",
+        version="0.4.1",
     )
 
+    raw_origins = os.getenv("AUTOCRAFT_CORS_ORIGINS", "*").strip()
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    # Browsers reject credentials + wildcard origin; only enable credentials for explicit origins
+    allow_creds = origins != ["*"]
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=os.getenv("AUTOCRAFT_CORS_ORIGINS", "*").split(","),
-        allow_credentials=True,
+        allow_origins=origins,
+        allow_credentials=allow_creds,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -158,11 +166,15 @@ def create_app() -> FastAPI:
                 response=reply,
                 history_length=len(agent.memory.get_history()),
             )
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @application.get("/api/session/{session_id}", response_model=SessionInfo, dependencies=auth_dep)
     def get_session(session_id: str) -> SessionInfo:
+        if not is_valid_session_id(session_id):
+            raise HTTPException(status_code=400, detail="Invalid session id")
         agent = _sessions.get(session_id)
         if agent is None:
             data = _store.load(session_id)
@@ -183,6 +195,8 @@ def create_app() -> FastAPI:
 
     @application.post("/api/session/{session_id}/clear", dependencies=auth_dep)
     def clear_session(session_id: str) -> dict:
+        if not is_valid_session_id(session_id):
+            raise HTTPException(status_code=400, detail="Invalid session id")
         agent = _sessions.get(session_id)
         if agent is None and _store.load(session_id) is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -195,12 +209,17 @@ def create_app() -> FastAPI:
 
     @application.delete("/api/session/{session_id}", dependencies=auth_dep)
     def delete_session(session_id: str) -> dict:
+        if not is_valid_session_id(session_id):
+            raise HTTPException(status_code=400, detail="Invalid session id")
+        had_memory = session_id in _sessions
         _sessions.pop(session_id, None)
-        deleted = _store.delete(session_id)
-        if not deleted and session_id not in _sessions:
-            # already removed from memory; if never persisted, 404
-            if not deleted:
-                raise HTTPException(status_code=404, detail="Session not found")
+        had_disk = False
+        try:
+            had_disk = _store.delete(session_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if not had_memory and not had_disk:
+            raise HTTPException(status_code=404, detail="Session not found")
         return {"status": "deleted", "session_id": session_id}
 
     @application.get("/api/team/roles", dependencies=auth_dep)
@@ -221,8 +240,6 @@ def create_app() -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    # --- testing agent -----------------------------------------------------
-
     @application.post("/api/test/run", dependencies=auth_dep)
     def test_run(body: TestRunRequest) -> dict:
         try:
@@ -231,8 +248,6 @@ def create_app() -> FastAPI:
             return result.to_dict()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
-
-    # --- plugin marketplace ------------------------------------------------
 
     @application.get("/api/plugins", dependencies=auth_dep)
     def plugins_list() -> dict:
@@ -353,6 +368,14 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       if (apiKey) h['X-API-Key'] = apiKey;
       return h;
     }
+    function formatError(j, statusText) {
+      if (!j) return statusText || 'Request failed';
+      const d = j.detail;
+      if (typeof d === 'string') return d;
+      if (Array.isArray(d)) return d.map(x => x.msg || JSON.stringify(x)).join('; ');
+      if (d != null) return JSON.stringify(d);
+      return statusText || 'Request failed';
+    }
     function addMsg(text, role) {
       const d = document.createElement('div');
       d.className = 'msg ' + role;
@@ -386,8 +409,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
           method: 'POST', headers: headers(),
           body: JSON.stringify({ message, session_id: sessionId }),
         });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.detail || r.statusText);
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(formatError(j, r.statusText));
         setSession(j.session_id);
         addMsg(j.response, 'bot');
       } catch (err) {
@@ -405,8 +428,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         const r = await fetch('/api/team/run', {
           method: 'POST', headers: headers(), body: JSON.stringify({ goal }),
         });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.detail || r.statusText);
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(formatError(j, r.statusText));
         for (const s of j.steps || []) addMsg('[' + s.role + ']\n' + s.output, 'bot');
       } catch (err) {
         addMsg('Team error: ' + err.message, 'system');
@@ -422,8 +445,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
           method: 'POST', headers: headers(),
           body: JSON.stringify({ goal, execute: true }),
         });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.detail || r.statusText);
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(formatError(j, r.statusText));
         addMsg(j.plan + '\n\n' + j.command + '\n' + (j.command_output || ''), 'bot');
       } catch (err) {
         addMsg('Test error: ' + err.message, 'system');

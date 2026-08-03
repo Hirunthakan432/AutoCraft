@@ -66,10 +66,12 @@ class MockProvider(LLMProvider):
 class GeminiProvider(LLMProvider):
     """Adapter around the existing GeminiClient."""
 
-    def __init__(self, client=None, **client_kwargs):
+    def __init__(self, client=None, sandbox=None, **client_kwargs):
         if client is None:
             from src.core.llm import GeminiClient
 
+            if sandbox is not None:
+                client_kwargs = {**client_kwargs, "sandbox": sandbox}
             client = GeminiClient(**client_kwargs)
         self.client = client
 
@@ -98,7 +100,6 @@ def _history_to_openai_messages(
         messages.append({"role": "system", "content": system_instruction})
     for msg in history:
         role = msg.get("role", "user")
-        # Map Gemini-style "model" role to OpenAI "assistant"
         if role == "model":
             role = "assistant"
         messages.append({"role": role, "content": msg.get("content", "")})
@@ -111,14 +112,15 @@ class OpenAIProvider(LLMProvider):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gpt-4o-mini",
+        model: Optional[str] = None,
         base_url: str = "https://api.openai.com/v1",
         timeout: int = 60,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY is missing from environment variables.")
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        # Prefer explicit arg, then env, then default
+        self.model = model or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
@@ -161,7 +163,6 @@ class LocalProvider(LLMProvider):
         ).rstrip("/")
         self.model = model or os.getenv("LOCAL_LLM_MODEL", "llama3.2")
         self.timeout = timeout
-        # Optional key for proxies that require one
         self.api_key = os.getenv("LOCAL_LLM_API_KEY", "ollama")
 
     def _chat(self, messages: List[dict]) -> str:
@@ -188,7 +189,11 @@ class LocalProvider(LLMProvider):
         return self._chat(messages)
 
 
-def create_provider(name: Optional[str] = None) -> LLMProvider:
+def create_provider(
+    name: Optional[str] = None,
+    *,
+    sandbox=None,
+) -> LLMProvider:
     """Build a provider from name or AUTOCRAFT_PROVIDER env (default: gemini)."""
     key = (name or os.getenv("AUTOCRAFT_PROVIDER", "gemini")).strip().lower()
     if key in ("mock", "test"):
@@ -198,7 +203,7 @@ def create_provider(name: Optional[str] = None) -> LLMProvider:
     if key in ("local", "ollama"):
         return LocalProvider()
     if key in ("gemini", "google"):
-        return GeminiProvider()
+        return GeminiProvider(sandbox=sandbox)
     raise ValueError(
         f"Unknown provider '{key}'. Use: gemini | openai | local | mock"
     )

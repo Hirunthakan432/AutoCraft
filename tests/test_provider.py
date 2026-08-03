@@ -50,6 +50,20 @@ def test_create_provider_unknown():
         create_provider("nope")
 
 
+def test_openai_model_from_env(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o")
+    p = OpenAIProvider()
+    assert p.model == "gpt-4o"
+
+
+def test_openai_model_arg_overrides_env(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o")
+    p = OpenAIProvider(model="gpt-4o-mini")
+    assert p.model == "gpt-4o-mini"
+
+
 @patch("src.llm.provider.requests.post")
 def test_openai_provider_chat(mock_post):
     mock_resp = MagicMock()
