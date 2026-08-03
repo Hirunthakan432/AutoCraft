@@ -105,8 +105,9 @@ class PluginRegistry:
         self.meta[name].enabled = True
 
     def disable(self, name: str) -> None:
-        if name in self.meta:
-            self.meta[name].enabled = False
+        if name not in self.meta or not self.meta[name].installed:
+            raise KeyError(f"Plugin '{name}' is not installed")
+        self.meta[name].enabled = False
 
     def get(self, name: str) -> Optional[Callable[..., Any]]:
         info = self.meta.get(name)
