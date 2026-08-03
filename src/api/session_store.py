@@ -12,6 +12,10 @@ from typing import Any, Dict, List, Optional
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
+def is_valid_session_id(session_id: str) -> bool:
+    return bool(session_id and _SAFE_ID.match(session_id))
+
+
 class SessionStore:
     """Persists chat history per session_id as JSON."""
 
@@ -22,11 +26,13 @@ class SessionStore:
         self._lock = threading.Lock()
 
     def _path(self, session_id: str) -> Path:
-        if not session_id or not _SAFE_ID.match(session_id):
+        if not is_valid_session_id(session_id):
             raise ValueError("Invalid session id")
         path = (self.root / f"{session_id}.json").resolve()
-        if not str(path).startswith(str(self.root)):
-            raise ValueError("Invalid session id")
+        try:
+            path.relative_to(self.root)
+        except ValueError as e:
+            raise ValueError("Invalid session id") from e
         return path
 
     def load(self, session_id: str) -> Optional[Dict[str, Any]]:

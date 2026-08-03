@@ -26,13 +26,20 @@ class AgentController:
         system_instruction: Optional[str] = None,
     ):
         self.llm = llm
-        self.memory = memory or AgentMemory(
-            system_instruction=system_instruction or DEFAULT_SYSTEM
-        )
-        if system_instruction and not self.memory.system_instruction:
-            self.memory.system_instruction = system_instruction
-        self.plugins = plugins
         self.sandbox = sandbox if sandbox is not None else create_default_sandbox()
+        self.plugins = plugins
+
+        if memory is not None:
+            self.memory = memory
+            # Explicit system_instruction always wins when provided
+            if system_instruction is not None:
+                self.memory.system_instruction = system_instruction
+            elif not self.memory.system_instruction:
+                self.memory.system_instruction = DEFAULT_SYSTEM
+        else:
+            self.memory = AgentMemory(
+                system_instruction=system_instruction or DEFAULT_SYSTEM
+            )
 
     def run_tool(self, name: str, *args: Any, **kwargs: Any) -> Any:
         """Execute a tool through the sandbox."""
@@ -70,13 +77,20 @@ def create_agent(
     use_mock: bool = False,
     provider: Optional[str] = None,
     system_instruction: Optional[str] = None,
+    sandbox: Optional[ToolSandbox] = None,
 ) -> AgentController:
     """Factory used by CLI / main entry points.
 
     Priority: use_mock → explicit provider name → AUTOCRAFT_PROVIDER env → gemini.
+    Gemini shares the same ToolSandbox instance as the controller.
     """
+    box = sandbox if sandbox is not None else create_default_sandbox()
     if use_mock:
         llm: LLMProvider = MockProvider()
     else:
-        llm = create_provider(provider)
-    return AgentController(llm=llm, system_instruction=system_instruction)
+        llm = create_provider(provider, sandbox=box)
+    return AgentController(
+        llm=llm,
+        system_instruction=system_instruction,
+        sandbox=box,
+    )
