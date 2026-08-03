@@ -47,12 +47,14 @@ class SessionStore:
         session_id: str,
         history: List[dict],
         tasks: Optional[List[str]] = None,
+        facts: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         path = self._path(session_id)
         payload = {
             "session_id": session_id,
             "history": history,
             "tasks": tasks or [],
+            "facts": facts or {},
         }
         with self._lock:
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

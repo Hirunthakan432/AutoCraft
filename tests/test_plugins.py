@@ -28,3 +28,12 @@ def test_unknown_install():
     reg = PluginRegistry()
     with pytest.raises(KeyError):
         reg.install("no-such-plugin")
+
+
+def test_unknown_disable():
+    reg = PluginRegistry()
+    with pytest.raises(KeyError):
+        reg.disable("no-such-plugin")
+    # installed=False until install
+    with pytest.raises(KeyError):
+        reg.disable("summarize")
