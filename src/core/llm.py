@@ -39,7 +39,7 @@ class GeminiClient:
         self.sandbox = sandbox if sandbox is not None else create_default_sandbox()
         self.tools = self.sandbox.wrapped_tools()
 
-    def generate_chat_response(self, history: list, system_instruction: str = None) -> str:
+    def generate_chat_response(self, history: list, system_instruction: str | None = None) -> str:
         """Generates a response with automatic native function/tool execution support."""
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
