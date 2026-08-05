@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterator, Optional
 
 from src.core.memory import AgentMemory
 from src.llm.provider import LLMProvider, MockProvider, create_provider
@@ -88,6 +88,39 @@ class AgentController:
         """Alias for interactive multi-turn use."""
         result = self.run(message)
         return result if isinstance(result, str) else str(result)
+
+    def stream(self, task: str) -> Iterator[str]:
+        """Stream a task response chunk-by-chunk; stores full reply when done.
+
+        Yields text deltas. Memory and persistence are updated after the
+        stream completes (same as run()).
+        """
+        self.memory.remember("tasks", task)
+        self.memory.add_user_message(task)
+
+        if self.llm is None:
+            result = {"status": "completed", "task": task, "response": None}
+            self.memory.add_agent_message(str(result))
+            if self._persistence_callback:
+                self._persistence_callback()
+            yield str(result)
+            return
+
+        chunks: list[str] = []
+        for chunk in self.llm.stream_chat_response(
+            history=self.memory.get_history(),
+            system_instruction=self.memory.system_instruction,
+        ):
+            if chunk:
+                chunks.append(chunk)
+                yield chunk
+
+        response = "".join(chunks)
+        self.memory.add_agent_message(response)
+        self.memory.remember("responses", response)
+
+        if self._persistence_callback:
+            self._persistence_callback()
 
     def clear_session(self) -> None:
         """Clear conversation history and long-term facts for this session."""
