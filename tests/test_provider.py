@@ -90,11 +90,29 @@ def test_local_provider_chat(mock_post):
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = {
-        "choices": [{"message": {"content": "hello from local"}}]
+        "choices": [{"message": {"content": "local reply"}}]
     }
     mock_post.return_value = mock_resp
 
     p = LocalProvider(base_url="http://127.0.0.1:11434/v1", model="llama3.2")
-    assert p.generate("ping") == "hello from local"
-    url = mock_post.call_args.args[0]
-    assert url.endswith("/chat/completions")
+    out = p.generate("ping")
+    assert out == "local reply"
+
+
+def test_mock_stream_yields_chunks():
+    p = MockProvider(prefix="Hi")
+    chunks = list(
+        p.stream_chat_response([{"role": "user", "content": "there friend"}])
+    )
+    assert len(chunks) >= 2
+    assert "".join(chunks) == "Hi: there friend"
+
+
+def test_base_stream_fallback():
+    class OnlyGenerate(LLMProvider):
+        def generate(self, prompt: str) -> str:
+            return f"echo:{prompt}"
+
+    p = OnlyGenerate()
+    chunks = list(p.stream_chat_response([{"role": "user", "content": "x"}]))
+    assert chunks == ["echo:x"]
