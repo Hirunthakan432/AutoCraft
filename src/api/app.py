@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
+import json
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -174,7 +175,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="AutoCraft Dashboard API",
         description="Web API for the AutoCraft agent framework",
-        version="0.5.0",
+        version="0.6.0",
     )
 
     raw_origins = os.getenv("AUTOCRAFT_CORS_ORIGINS", "*").strip()
@@ -227,6 +228,46 @@ def create_app() -> FastAPI:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @application.post("/api/chat/stream", dependencies=auth_dep)
+    def chat_stream(body: ChatRequest) -> StreamingResponse:
+        """Server-Sent Events stream of chat tokens.
+
+        Events:
+          data: {"token": "..."}     — incremental text
+          data: {"error": "..."}     — failure mid-stream
+          data: {"done": true, "session_id": "...", "response": "..."}
+        """
+        try:
+            sid, agent = _get_or_create_agent(body.session_id, body.provider)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+        def event_gen():
+            chunks: list[str] = []
+            try:
+                for chunk in agent.stream(body.message):
+                    chunks.append(chunk)
+                    yield f"data: {json.dumps({'token': chunk})}\n\n"
+                full = "".join(chunks)
+                # Persistence is handled by the agent stream() callback;
+                # keep an explicit save as a safety net.
+                _persist_agent(sid, agent)
+                yield f"data: {json.dumps({'done': True, 'session_id': sid, 'response': full})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return StreamingResponse(
+            event_gen(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @application.get("/api/session/{session_id}", response_model=SessionInfo, dependencies=auth_dep)
     def get_session(session_id: str) -> SessionInfo:

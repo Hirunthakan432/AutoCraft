@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 import requests
 
@@ -30,6 +30,18 @@ class LLMProvider(ABC):
         if system_instruction:
             prompt = f"{system_instruction}\n\n{prompt}"
         return self.generate(prompt)
+
+    def stream_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> Iterator[str]:
+        """Yield response chunks for streaming UIs.
+
+        Default implementation yields the full generate_chat_response result
+        as a single chunk so non-streaming backends still work.
+        """
+        yield self.generate_chat_response(history, system_instruction)
 
 
 class MockProvider(LLMProvider):
@@ -62,6 +74,19 @@ class MockProvider(LLMProvider):
                 break
         return f"{self.prefix}: {last_user}"
 
+    def stream_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> Iterator[str]:
+        """Yield the mock reply in small word-sized chunks."""
+        full = self.generate_chat_response(history, system_instruction)
+        self.calls.append({"type": "stream", "full": full})
+        parts = full.split(" ")
+        for i, part in enumerate(parts):
+            chunk = part if i == len(parts) - 1 else part + " "
+            yield chunk
+
 
 class GeminiProvider(LLMProvider):
     """Adapter around the existing GeminiClient."""
@@ -89,6 +114,21 @@ class GeminiProvider(LLMProvider):
             history=history,
             system_instruction=system_instruction,
         )
+
+    def stream_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> Iterator[str]:
+        """Stream via GeminiClient when available; otherwise single-chunk fallback."""
+        stream_fn = getattr(self.client, "stream_chat_response", None)
+        if callable(stream_fn):
+            yield from stream_fn(
+                history=history,
+                system_instruction=system_instruction,
+            )
+        else:
+            yield self.generate_chat_response(history, system_instruction)
 
 
 def _history_to_openai_messages(
@@ -147,6 +187,41 @@ class OpenAIProvider(LLMProvider):
         messages = _history_to_openai_messages(history, system_instruction)
         return self._chat(messages)
 
+    def stream_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> Iterator[str]:
+        """Stream tokens from the OpenAI-compatible chat completions API."""
+        messages = _history_to_openai_messages(history, system_instruction)
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {"model": self.model, "messages": messages, "stream": True}
+        with requests.post(
+            url, headers=headers, json=payload, timeout=self.timeout, stream=True
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    data = line[6:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        import json as _json
+
+                        obj = _json.loads(data)
+                        delta = obj["choices"][0].get("delta") or {}
+                        content = delta.get("content")
+                        if content:
+                            yield content
+                    except (KeyError, ValueError, IndexError):
+                        continue
+
 
 class LocalProvider(LLMProvider):
     """Local OpenAI-compatible server (e.g. Ollama at localhost:11434)."""
@@ -187,6 +262,41 @@ class LocalProvider(LLMProvider):
     ) -> str:
         messages = _history_to_openai_messages(history, system_instruction)
         return self._chat(messages)
+
+    def stream_chat_response(
+        self,
+        history: List[dict],
+        system_instruction: Optional[str] = None,
+    ) -> Iterator[str]:
+        """Stream tokens from a local OpenAI-compatible server (e.g. Ollama)."""
+        messages = _history_to_openai_messages(history, system_instruction)
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {"model": self.model, "messages": messages, "stream": True}
+        with requests.post(
+            url, headers=headers, json=payload, timeout=self.timeout, stream=True
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    data = line[6:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        import json as _json
+
+                        obj = _json.loads(data)
+                        delta = obj["choices"][0].get("delta") or {}
+                        content = delta.get("content")
+                        if content:
+                            yield content
+                    except (KeyError, ValueError, IndexError):
+                        continue
 
 
 def create_provider(

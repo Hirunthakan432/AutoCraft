@@ -53,3 +53,12 @@ def test_clear_session_clears_history_and_facts():
     assert agent.memory.get_history() == []
     assert agent.memory.recall("tasks") == []
     assert agent.memory.facts == {}
+
+
+def test_agent_stream_assembles_and_persists():
+    mock = MockProvider(prefix="OK")
+    agent = AgentController(llm=mock)
+    chunks = list(agent.stream("ship it"))
+    assert "".join(chunks) == "OK: ship it"
+    assert agent.memory.get_history()[-1]["content"] == "OK: ship it"
+    assert agent.memory.recall("tasks") == ["ship it"]
