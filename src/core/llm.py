@@ -18,6 +18,13 @@ _FALLBACK_MODELS = (
 )
 
 
+def _is_retryable_api_error(error_str: str) -> bool:
+    """Return True when the error indicates a transient condition (rate-limit,
+    quota, or temporary unavailability) worth retrying after a back-off."""
+    markers = ("429", "RESOURCE_EXHAUSTED", "503")
+    return any(m in error_str for m in markers)
+
+
 class GeminiClient:
     def __init__(
         self,
@@ -46,7 +53,10 @@ class GeminiClient:
             tools=self.tools,
         ) if system_instruction else types.GenerateContentConfig(tools=self.tools)
 
-        models_to_try = [self.model_name, *_FALLBACK_MODELS]
+        models_to_try = [self.model_name]
+        for m in _FALLBACK_MODELS:
+            if m != self.model_name:
+                models_to_try.append(m)
 
         contents = []
         for msg in history:
@@ -59,7 +69,7 @@ class GeminiClient:
             )
 
         last_error = None
-        for model in list(dict.fromkeys(models_to_try)):
+        for model in models_to_try:
             for attempt in range(2):
                 try:
                     response = self.client.models.generate_content(
@@ -81,16 +91,16 @@ class GeminiClient:
                 except APIError as e:
                     last_error = e
                     err_str = str(e)
-                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str:
+                    if _is_retryable_api_error(err_str):
                         wait = (attempt + 1) * 2
-                        print(f"\n⚠️ {model} busy or rate limited. Retrying in {wait}s...")
+                        print(f"\n{model} busy or rate limited. Retrying in {wait}s...")
                         time.sleep(wait)
                     else:
-                        print(f"\n⚠️ Error on {model}: {e}")
+                        print(f"\nError on {model}: {e}")
                         break
                 except Exception as e:
                     last_error = e
-                    print(f"\n⚠️ Unexpected error on {model}: {e}")
+                    print(f"\nUnexpected error on {model}: {e}")
                     break
 
         raise RuntimeError(

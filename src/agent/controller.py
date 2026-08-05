@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from src.core.memory import AgentMemory
 from src.llm.provider import LLMProvider, MockProvider, create_provider
@@ -28,6 +28,8 @@ class AgentController:
         self.llm = llm
         self.sandbox = sandbox if sandbox is not None else create_default_sandbox()
         self.plugins = plugins
+        # Optional callback invoked after run() completes - used by API to persist state
+        self._persistence_callback: Optional[Callable[[], None]] = None
 
         if memory is not None:
             self.memory = memory
@@ -41,18 +43,33 @@ class AgentController:
                 system_instruction=system_instruction or DEFAULT_SYSTEM
             )
 
+    def set_persistence_callback(self, callback: Optional[Callable[[], None]]) -> None:
+        """Register a callback that is invoked after every run() completes.
+
+        The API layer uses this to persist session state to disk after each
+        chat turn, so that memory survives server restarts.
+        """
+        self._persistence_callback = callback
+
     def run_tool(self, name: str, *args: Any, **kwargs: Any) -> Any:
         """Execute a tool through the sandbox."""
         return self.sandbox.execute(name, *args, **kwargs)
 
     def run(self, task: str) -> Any:
-        """Run a single task end-to-end: remember, call LLM, store reply."""
+        """Run a single task end-to-end: remember, call LLM, store reply.
+
+        If a persistence callback has been registered (e.g. by the API layer),
+        it is invoked after the response is stored so that session state is
+        always written to disk.
+        """
         self.memory.remember("tasks", task)
         self.memory.add_user_message(task)
 
         if self.llm is None:
             result = {"status": "completed", "task": task, "response": None}
             self.memory.add_agent_message(str(result))
+            if self._persistence_callback:
+                self._persistence_callback()
             return result
 
         response = self.llm.generate_chat_response(
@@ -61,6 +78,10 @@ class AgentController:
         )
         self.memory.add_agent_message(response)
         self.memory.remember("responses", response)
+
+        if self._persistence_callback:
+            self._persistence_callback()
+
         return response
 
     def chat(self, message: str) -> str:
@@ -82,14 +103,22 @@ def create_agent(
 ) -> AgentController:
     """Factory used by CLI / main entry points.
 
-    Priority: use_mock → explicit provider name → AUTOCRAFT_PROVIDER env → gemini.
+    Priority: use_mock -> explicit provider name -> AUTOCRAFT_PROVIDER env -> gemini.
     Gemini shares the same ToolSandbox instance as the controller.
     """
     box = sandbox if sandbox is not None else create_default_sandbox()
     if use_mock:
         llm: LLMProvider = MockProvider()
     else:
-        llm = create_provider(provider, sandbox=box)
+        try:
+            llm = create_provider(provider, sandbox=box)
+        except (ValueError, RuntimeError) as e:
+            provider_name = provider or "gemini"
+            raise RuntimeError(
+                f"Failed to initialise {provider_name} provider: {e}\n"
+                "Make sure the required API key is set (e.g. GEMINI_API_KEY, "
+                "OPENAI_API_KEY) or use --mock / AUTOCRAFT_PROVIDER=mock."
+            ) from e
     return AgentController(
         llm=llm,
         system_instruction=system_instruction,

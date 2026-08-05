@@ -85,12 +85,19 @@ class PluginRegistry:
         self.meta[name] = info
 
     def install(self, name: str) -> PluginInfo:
-        if name not in MARKETPLACE_CATALOG and name not in BUILTIN_IMPLEMENTATIONS:
+        # Check whether the plugin is known at all (marketplace OR built-in impl)
+        in_catalog = name in MARKETPLACE_CATALOG
+        has_impl = name in BUILTIN_IMPLEMENTATIONS
+
+        if not in_catalog and not has_impl:
             raise KeyError(f"Plugin '{name}' not found in marketplace")
-        impl = BUILTIN_IMPLEMENTATIONS.get(name)
-        if impl is None:
-            raise KeyError(f"Plugin '{name}' has no implementation")
-        self.register(name, impl, enable=True)
+        if in_catalog and not has_impl:
+            raise KeyError(
+                f"Plugin '{name}' is listed in the marketplace but has no "
+                "implementation yet - it cannot be installed"
+            )
+
+        self.register(name, BUILTIN_IMPLEMENTATIONS[name], enable=True)
         return self.meta[name]
 
     def uninstall(self, name: str) -> None:
