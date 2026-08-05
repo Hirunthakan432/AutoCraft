@@ -89,3 +89,17 @@ def test_auth_when_configured(tmp_path, monkeypatch):
         )
         assert ok.status_code == 200
     monkeypatch.delenv("AUTOCRAFT_API_KEYS", raising=False)
+
+
+def test_chat_stream_sse(client):
+    with client.stream(
+        "POST",
+        "/api/chat/stream",
+        json={"message": "hello stream"},
+    ) as resp:
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        body = b"".join(resp.iter_bytes()).decode()
+    assert "data:" in body
+    assert "Mock response" in body or "hello stream" in body
+    assert "done" in body
