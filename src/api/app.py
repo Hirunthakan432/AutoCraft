@@ -24,7 +24,7 @@ from src.plugins.registry import create_default_registry
 
 load_dotenv()
 
-# Repo root: src/api/app.py → parents[2] == project root
+# Repo root: src/api/app.py -> parents[2] == project root
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _FRONTEND_DIR = _PROJECT_ROOT / "frontend"
 
@@ -148,6 +148,10 @@ def _get_or_create_agent(
     agent = create_agent(use_mock=_use_mock(), provider=provider)
     if session_id:
         _hydrate_agent(sid, agent)
+    # Register a persistence callback so run() always writes state to disk.
+    # This ensures memory survives even when run() is called directly (e.g.
+    # by the orchestrator) rather than only through the API chat handler.
+    agent.set_persistence_callback(lambda: _persist_agent(sid, agent))
     _store_session(sid, agent)
     return sid, agent
 
@@ -210,6 +214,9 @@ def create_app() -> FastAPI:
         try:
             sid, agent = _get_or_create_agent(body.session_id, body.provider)
             reply = agent.chat(body.message)
+            # The persistence callback registered in _get_or_create_agent handles
+            # writing to disk on every run() call, so this explicit call is
+            # technically redundant but kept as a safety net.
             _persist_agent(sid, agent)
             return ChatResponse(
                 session_id=sid,
