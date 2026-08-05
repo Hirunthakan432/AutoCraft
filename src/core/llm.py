@@ -106,3 +106,68 @@ class GeminiClient:
         raise RuntimeError(
             f"Quota exceeded or models unavailable. Last error: {last_error}"
         )
+
+    def stream_chat_response(
+        self, history: list, system_instruction: str | None = None
+    ):
+        """Yield text chunks from Gemini generate_content_stream when available.
+
+        Falls back to a single full response if streaming is unavailable.
+        Tool calling is disabled during streaming for simpler token delivery.
+        """
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+        ) if system_instruction else types.GenerateContentConfig()
+
+        models_to_try = [self.model_name]
+        for m in _FALLBACK_MODELS:
+            if m != self.model_name:
+                models_to_try.append(m)
+
+        contents = []
+        for msg in history:
+            role = "user" if msg["role"] == "user" else "model"
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])],
+                )
+            )
+
+        last_error = None
+        for model in models_to_try:
+            try:
+                stream = self.client.models.generate_content_stream(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                for chunk in stream:
+                    text = getattr(chunk, "text", None)
+                    if text:
+                        yield text
+                return
+            except APIError as e:
+                last_error = e
+                err_str = str(e)
+                if _is_retryable_api_error(err_str):
+                    wait = 2
+                    print(f"\n{model} busy during stream. Retrying in {wait}s...")
+                    time.sleep(wait)
+                    continue
+                print(f"\nStream error on {model}: {e}")
+                break
+            except Exception as e:
+                last_error = e
+                print(f"\nUnexpected stream error on {model}: {e}")
+                break
+
+        # Fallback: non-streaming full response as one chunk
+        try:
+            full = self.generate_chat_response(history, system_instruction)
+            if full:
+                yield full
+        except Exception as e:
+            raise RuntimeError(
+                f"Streaming failed and fallback failed. Last error: {last_error}; fallback: {e}"
+            ) from e
