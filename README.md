@@ -56,11 +56,14 @@ The UI lives in `frontend/` and is served by FastAPI:
 
 | View | Features |
 |------|----------|
-| **Chat** | Multi-turn agent chat, provider override, clear session |
-| **Team** | Multi-agent pipeline (planner → coder → reviewer) |
-| **Test agent** | Propose + optionally run pytest |
-| **Plugins** | Marketplace install / enable / disable |
-| **Settings** | API key, base URL, health ping |
+| **Chat** | Streaming responses, restored sessions, quick prompts, provider override |
+| **Team** | Visual, configurable multi-agent pipeline with role-by-role output |
+| **Test lab** | Propose and optionally run pytest with a clear result state |
+| **Plugins** | Search, filter, install, enable, and disable marketplace tools |
+| **Settings** | Dark/light/system theme, API access, and live runtime diagnostics |
+
+The dashboard is dependency-free, keyboard accessible, and responsive from mobile
+screens to wide desktop workspaces.
 
 Offline UI without cloud keys:
 
@@ -198,6 +201,7 @@ print(reg.run("summarize", "line one\nline two"))
 | `GET` | `/health` | Status, provider, auth flag |
 | `GET` | `/api/providers` | Backends |
 | `POST` | `/api/chat` | Single-agent chat |
+| `POST` | `/api/chat/stream` | Streaming chat over server-sent events |
 | `GET` | `/api/session/{id}` | History / tasks |
 | `POST` | `/api/session/{id}/clear` | Clear history |
 | `DELETE` | `/api/session/{id}` | Delete session |
@@ -258,7 +262,7 @@ In the browser UI, open **Settings** to set the API key (stored in `localStorage
 - [x] API auth + persistent sessions
 - [ ] Richer plugin packaging (entry points / pip packages)
 - [ ] Redis / DB-backed session store
-- [ ] Streaming responses (SSE / WebSocket)
+- [x] Streaming chat responses (SSE)
 
 ---
 

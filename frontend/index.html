@@ -1,145 +1,184 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="AutoCraft — AI agent framework dashboard" />
-  <title>AutoCraft</title>
+  <meta name="description" content="AutoCraft — an AI workspace for building, reviewing, and testing software." />
+  <meta name="theme-color" content="#0a0d14" />
+  <title>AutoCraft · AI software workspace</title>
   <link rel="stylesheet" href="/static/styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%237c5cff'/><path d='M55 12 22 56h25l-4 32 35-46H53z' fill='white'/></svg>" />
 </head>
 <body>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="logo">⚡</span>
-        <div>
-          <strong>AutoCraft</strong>
-          <span class="brand-sub">Agent framework</span>
-        </div>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-mark" viewBox="0 0 24 24"><path d="m13.2 2-8 11h6.2l-.7 9 8.1-12h-6.2l.6-8Z" /></symbol>
+    <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M20 15a3 3 0 0 1-3 3H8l-4 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9Z" /><path d="M8 8h8M8 12h5" /></symbol>
+    <symbol id="icon-team" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" /><circle cx="17" cy="7" r="2" /><path d="M3 20v-2a5 5 0 0 1 10 0v2M14 14a4 4 0 0 1 7 3v2" /></symbol>
+    <symbol id="icon-test" viewBox="0 0 24 24"><path d="M9 3h6M10 3v5l-5.6 9.2A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.1-3.8L14 8V3" /><path d="M7.5 15h9" /></symbol>
+    <symbol id="icon-plugin" viewBox="0 0 24 24"><path d="M8 3v4M16 3v4M6 7h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6V7ZM12 17v4" /></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20 15.2A8 8 0 1 1 8.8 4 6.5 6.5 0 0 0 20 15.2Z" /></symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></symbol>
+    <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" /></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5" /><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5" /></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="2.5" /></symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2" /><rect x="3" y="14" width="18" height="6" rx="2" /><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6" /></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8M16 7l2 2M14 9l2 2" /></symbol>
+    <symbol id="icon-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" /></symbol>
+    <symbol id="icon-spark" viewBox="0 0 24 24"><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3ZM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z" /></symbol>
+  </svg>
+
+  <a class="skip-link" href="#mainContent">Skip to workspace</a>
+  <div class="mobile-overlay" id="mobileOverlay" hidden></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <div class="brand-row">
+        <a class="brand" href="#chat" aria-label="AutoCraft home">
+          <span class="brand-mark"><svg class="icon"><use href="#icon-mark"></use></svg></span>
+          <span class="brand-copy"><strong>AutoCraft</strong><span>Software builder</span></span>
+        </a>
+        <button class="icon-btn sidebar-close" id="sidebarClose" type="button" aria-label="Close navigation"><svg class="icon"><use href="#icon-close"></use></svg></button>
       </div>
 
+      <button class="new-session-btn" id="newSessionBtn" type="button"><svg class="icon"><use href="#icon-plus"></use></svg><span>New build session</span><kbd>N</kbd></button>
+
+      <div class="nav-label">Workspace</div>
       <nav class="nav" id="nav">
-        <button type="button" class="nav-item active" data-view="chat">Chat</button>
-        <button type="button" class="nav-item" data-view="team">Team</button>
-        <button type="button" class="nav-item" data-view="test">Test agent</button>
-        <button type="button" class="nav-item" data-view="plugins">Plugins</button>
-        <button type="button" class="nav-item" data-view="settings">Settings</button>
+        <button type="button" class="nav-item active" data-view="chat" aria-current="page"><svg class="icon"><use href="#icon-chat"></use></svg><span>Build chat</span><kbd>1</kbd></button>
+        <button type="button" class="nav-item" data-view="team"><svg class="icon"><use href="#icon-team"></use></svg><span>Agent team</span><kbd>2</kbd></button>
+        <button type="button" class="nav-item" data-view="test"><svg class="icon"><use href="#icon-test"></use></svg><span>Test lab</span><kbd>3</kbd></button>
+        <button type="button" class="nav-item" data-view="plugins"><svg class="icon"><use href="#icon-plugin"></use></svg><span>Plugins</span><kbd>4</kbd></button>
+        <button type="button" class="nav-item" data-view="settings"><svg class="icon"><use href="#icon-settings"></use></svg><span>Settings</span><kbd>5</kbd></button>
       </nav>
 
-      <div class="sidebar-foot">
-        <div class="status-pill" id="statusPill">connecting…</div>
-        <div class="session-pill" id="sessionPill">no session</div>
+      <div class="sidebar-spacer"></div>
+      <div class="runtime-card" id="runtimeCard">
+        <div class="runtime-heading"><span class="status-dot" id="statusDot"></span><div><span class="runtime-label">Runtime</span><strong id="statusPill" aria-live="polite">Connecting…</strong></div></div>
+        <div class="runtime-meta"><span id="sidebarProvider">Detecting provider</span><span id="sessionPill">No active session</span></div>
       </div>
+      <div class="sidebar-footer"><span>AutoCraft v0.6</span><a href="https://github.com/Hirunthakan432/AutoCraft" target="_blank" rel="noreferrer">GitHub</a></div>
     </aside>
 
-    <main class="main">
-      <!-- Chat -->
-      <section class="view active" id="view-chat">
-        <header class="view-header">
-          <h1>Chat</h1>
-          <div class="header-actions">
-            <select id="chatProvider" class="select" title="Provider override">
-              <option value="">Default provider</option>
-            </select>
-            <button type="button" class="btn ghost" id="clearChatBtn">Clear</button>
-          </div>
-        </header>
-        <div class="messages" id="chatLog"></div>
-        <form class="composer" id="chatForm">
-          <textarea id="chatInput" rows="1" placeholder="Message AutoCraft…" autocomplete="off"></textarea>
-          <button type="submit" class="btn primary" id="chatSend">Send</button>
-        </form>
-      </section>
+    <main class="main" id="mainContent">
+      <header class="topbar">
+        <button class="icon-btn mobile-menu" id="mobileMenuBtn" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"></use></svg></button>
+        <div class="topbar-copy"><span class="eyebrow" id="viewEyebrow">Build workspace</span><h1 id="viewTitle">Agent chat</h1><p id="viewDescription">Turn an idea into an actionable software plan.</p></div>
+        <div class="topbar-actions">
+          <button class="connection-badge" id="connectionBadge" type="button" title="Open connection settings"><span class="status-dot"></span><span id="connectionText">Connecting</span></button>
+          <button class="icon-btn" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme"><svg class="icon theme-icon theme-icon-moon"><use href="#icon-moon"></use></svg><svg class="icon theme-icon theme-icon-sun"><use href="#icon-sun"></use></svg></button>
+        </div>
+      </header>
 
-      <!-- Team -->
-      <section class="view" id="view-team">
-        <header class="view-header">
-          <h1>Multi-agent team</h1>
-          <p class="muted">Planner → Coder → Reviewer pipeline</p>
-        </header>
-        <form class="panel-form" id="teamForm">
-          <label>
-            Goal
-            <textarea id="teamGoal" rows="3" placeholder="e.g. Add rate limiting to the API"></textarea>
-          </label>
-          <div class="row">
-            <label class="grow">
-              Pipeline (comma-separated roles)
-              <input type="text" id="teamPipeline" placeholder="planner, coder, reviewer" />
-            </label>
-            <label>
-              Provider
-              <select id="teamProvider" class="select">
-                <option value="">Default</option>
-              </select>
-            </label>
+      <div class="workspace">
+        <section class="view active" id="view-chat" data-view="chat">
+          <div class="view-toolbar">
+            <div class="session-context"><span class="context-icon"><svg class="icon"><use href="#icon-spark"></use></svg></span><div><span>Active context</span><strong id="chatSessionLabel">Fresh workspace</strong></div></div>
+            <button type="button" class="btn ghost sm" id="clearChatBtn"><svg class="icon"><use href="#icon-trash"></use></svg>Clear chat</button>
           </div>
-          <button type="submit" class="btn primary" id="teamRun">Run team</button>
-        </form>
-        <div class="messages" id="teamLog"></div>
-      </section>
 
-      <!-- Test -->
-      <section class="view" id="view-test">
-        <header class="view-header">
-          <h1>Test agent</h1>
-          <p class="muted">Propose and optionally execute pytest plans</p>
-        </header>
-        <form class="panel-form" id="testForm">
-          <label>
-            What should we test?
-            <textarea id="testGoal" rows="3" placeholder="e.g. cover AgentMemory edge cases"></textarea>
-          </label>
-          <div class="row">
-            <label class="checkbox">
-              <input type="checkbox" id="testExecute" checked />
-              Execute pytest
-            </label>
-            <label>
-              Provider
-              <select id="testProvider" class="select">
-                <option value="">Default</option>
-              </select>
-            </label>
+          <div class="chat-stage surface">
+            <div class="chat-empty" id="chatEmpty">
+              <div class="hero-mark"><svg class="icon"><use href="#icon-mark"></use></svg></div>
+              <span class="eyebrow accent">AI software builder</span>
+              <h2>What will we craft today?</h2>
+              <p>Describe a feature, bug, or product idea. AutoCraft will help reason through the work and shape the next step.</p>
+              <div class="prompt-grid">
+                <button class="prompt-card" type="button" data-prompt="Plan a clean REST API for a task manager"><span class="prompt-icon violet"><svg class="icon"><use href="#icon-spark"></use></svg></span><span><strong>Plan a feature</strong><small>Break an idea into buildable steps</small></span></button>
+                <button class="prompt-card" type="button" data-prompt="Review this project architecture and suggest improvements"><span class="prompt-icon blue"><svg class="icon"><use href="#icon-eye"></use></svg></span><span><strong>Review architecture</strong><small>Spot risks and simplify the design</small></span></button>
+                <button class="prompt-card" type="button" data-prompt="Help me debug a failing Python test"><span class="prompt-icon green"><svg class="icon"><use href="#icon-test"></use></svg></span><span><strong>Debug a problem</strong><small>Investigate symptoms and likely causes</small></span></button>
+              </div>
+            </div>
+            <div class="messages" id="chatLog" aria-live="polite" aria-label="Chat messages"></div>
           </div>
-          <button type="submit" class="btn primary" id="testRun">Run test agent</button>
-        </form>
-        <div class="messages" id="testLog"></div>
-      </section>
 
-      <!-- Plugins -->
-      <section class="view" id="view-plugins">
-        <header class="view-header">
-          <h1>Plugin marketplace</h1>
-          <button type="button" class="btn ghost" id="refreshPlugins">Refresh</button>
-        </header>
-        <div class="plugin-grid" id="pluginGrid"></div>
-      </section>
+          <form class="composer" id="chatForm">
+            <div class="composer-main"><textarea id="chatInput" rows="1" maxlength="12000" placeholder="Describe what you want to build…" aria-label="Message AutoCraft" autocomplete="off"></textarea><button type="submit" class="send-btn" id="chatSend" aria-label="Send message"><svg class="icon send-icon"><use href="#icon-arrow"></use></svg><svg class="icon stop-icon"><use href="#icon-close"></use></svg></button></div>
+            <div class="composer-footer"><select id="chatProvider" class="bare-select" title="Provider override" aria-label="Chat provider"><option value="">Default provider</option></select><span><kbd>Enter</kbd> send <span class="dot-separator">·</span> <kbd>Shift</kbd> + <kbd>Enter</kbd> new line</span></div>
+          </form>
+        </section>
 
-      <!-- Settings -->
-      <section class="view" id="view-settings">
-        <header class="view-header">
-          <h1>Settings</h1>
-        </header>
-        <form class="panel-form" id="settingsForm">
-          <label>
-            API key <span class="muted">(X-API-Key when auth is enabled)</span>
-            <input type="password" id="apiKeyInput" placeholder="dev-key-1" autocomplete="off" />
-          </label>
-          <label>
-            API base URL <span class="muted">(leave empty for same origin)</span>
-            <input type="text" id="apiBaseInput" placeholder="http://127.0.0.1:8000" />
-          </label>
-          <div class="row">
-            <button type="submit" class="btn primary">Save</button>
-            <button type="button" class="btn ghost" id="pingBtn">Ping /health</button>
+        <section class="view" id="view-team" data-view="team">
+          <div class="stat-grid">
+            <article class="stat-card"><span class="stat-icon violet"><svg class="icon"><use href="#icon-team"></use></svg></span><div><strong id="roleCount">3</strong><span>specialist roles</span></div></article>
+            <article class="stat-card"><span class="stat-icon blue"><svg class="icon"><use href="#icon-link"></use></svg></span><div><strong>Shared</strong><span>working context</span></div></article>
+            <article class="stat-card"><span class="stat-icon green"><svg class="icon"><use href="#icon-check"></use></svg></span><div><strong>Sequential</strong><span>review pipeline</span></div></article>
           </div>
-          <pre class="code-block" id="healthOut">—</pre>
-        </form>
-      </section>
+
+          <div class="split-layout">
+            <form class="surface panel-form" id="teamForm">
+              <div class="panel-heading"><div><span class="eyebrow accent">Orchestration</span><h2>Configure the team</h2></div><span class="panel-number">01</span></div>
+              <label class="field"><span>Goal</span><textarea id="teamGoal" rows="5" maxlength="12000" placeholder="Describe the outcome your team should deliver…" required></textarea></label>
+              <label class="field"><span>Pipeline</span><input type="text" id="teamPipeline" value="planner, coder, reviewer" placeholder="planner, coder, reviewer" /><small>Roles run from left to right and share their output.</small></label>
+              <div class="pipeline-preview" id="pipelinePreview" aria-label="Agent pipeline"></div>
+              <div class="form-row"><label class="field grow"><span>Provider</span><select id="teamProvider" class="select"><option value="">Default provider</option></select></label><button type="submit" class="btn primary" id="teamRun"><svg class="icon"><use href="#icon-spark"></use></svg><span>Run team</span></button></div>
+            </form>
+
+            <section class="surface output-panel" aria-labelledby="teamOutputTitle">
+              <div class="panel-heading compact"><div><span class="eyebrow">Live output</span><h2 id="teamOutputTitle">Team activity</h2></div><span class="activity-light" id="teamActivity"></span></div>
+              <div class="output-empty" id="teamEmpty"><span class="empty-icon"><svg class="icon"><use href="#icon-team"></use></svg></span><strong>Your agent handoffs appear here</strong><p>Run the pipeline to see each specialist’s contribution.</p></div>
+              <div class="messages timeline" id="teamLog" aria-live="polite"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-test" data-view="test">
+          <div class="split-layout test-layout">
+            <form class="surface panel-form" id="testForm">
+              <div class="panel-heading"><div><span class="eyebrow accent">Quality gate</span><h2>Design a test run</h2></div><span class="panel-number">01</span></div>
+              <label class="field"><span>What should be tested?</span><textarea id="testGoal" rows="6" maxlength="12000" placeholder="Example: Cover AgentMemory edge cases and persistence failures…" required></textarea></label>
+              <div class="option-card"><div class="option-copy"><svg class="icon"><use href="#icon-test"></use></svg><div><strong>Execute pytest</strong><span>Run the generated plan in the secure workspace</span></div></div><label class="switch"><input type="checkbox" id="testExecute" checked /><span></span><em class="sr-only">Execute pytest</em></label></div>
+              <div class="form-row"><label class="field grow"><span>Provider</span><select id="testProvider" class="select"><option value="">Default provider</option></select></label><button type="submit" class="btn primary" id="testRun"><svg class="icon"><use href="#icon-test"></use></svg><span>Run test agent</span></button></div>
+            </form>
+
+            <section class="surface output-panel" aria-labelledby="testOutputTitle">
+              <div class="panel-heading compact"><div><span class="eyebrow">Test report</span><h2 id="testOutputTitle">Results</h2></div><span class="result-badge neutral" id="testResultBadge">Waiting</span></div>
+              <div class="output-empty" id="testEmpty"><span class="empty-icon"><svg class="icon"><use href="#icon-test"></use></svg></span><strong>No test run yet</strong><p>The proposed plan, command, and result will appear here.</p></div>
+              <div class="messages" id="testLog" aria-live="polite"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-plugins" data-view="plugins">
+          <div class="catalog-toolbar surface">
+            <label class="search-field"><svg class="icon"><use href="#icon-search"></use></svg><input id="pluginSearch" type="search" placeholder="Search plugins…" autocomplete="off" /></label>
+            <select class="select compact" id="pluginFilter" aria-label="Filter plugins"><option value="all">All plugins</option><option value="installed">Installed</option><option value="enabled">Enabled</option><option value="available">Available</option></select>
+            <button type="button" class="btn ghost" id="refreshPlugins"><svg class="icon"><use href="#icon-refresh"></use></svg>Refresh</button>
+          </div>
+          <div class="catalog-summary"><span id="pluginCount">Loading catalog…</span><span>Built for the AutoCraft runtime</span></div>
+          <div class="plugin-grid" id="pluginGrid" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="view-settings" data-view="settings">
+          <div class="settings-grid">
+            <form class="surface settings-card" id="settingsForm">
+              <div class="panel-heading"><div><span class="eyebrow accent">Connection</span><h2>API configuration</h2></div><span class="settings-icon"><svg class="icon"><use href="#icon-server"></use></svg></span></div>
+              <label class="field"><span>API base URL <small>Leave empty to use this server</small></span><span class="input-with-icon"><svg class="icon"><use href="#icon-link"></use></svg><input type="url" id="apiBaseInput" placeholder="http://127.0.0.1:8000" /></span></label>
+              <label class="field"><span>API key <small>Sent as X-API-Key when auth is enabled</small></span><span class="input-with-icon"><svg class="icon"><use href="#icon-key"></use></svg><input type="password" id="apiKeyInput" placeholder="dev-key-1" autocomplete="off" /><button class="field-action" id="toggleApiKey" type="button" aria-label="Show API key"><svg class="icon"><use href="#icon-eye"></use></svg></button></span></label>
+              <label class="field"><span>Appearance</span><select id="themeSelect" class="select full"><option value="system">Use system theme</option><option value="dark">Dark theme</option><option value="light">Light theme</option></select></label>
+              <div class="form-actions"><button type="submit" class="btn primary"><svg class="icon"><use href="#icon-check"></use></svg>Save settings</button><button type="button" class="btn ghost" id="pingBtn"><svg class="icon"><use href="#icon-refresh"></use></svg>Test connection</button></div>
+            </form>
+
+            <section class="surface settings-card" aria-labelledby="healthTitle">
+              <div class="panel-heading"><div><span class="eyebrow accent">Live diagnostics</span><h2 id="healthTitle">Runtime health</h2></div><span class="settings-icon"><svg class="icon"><use href="#icon-server"></use></svg></span></div>
+              <div class="health-grid"><div><span>Status</span><strong id="healthStatusValue">Checking…</strong></div><div><span>Provider</span><strong id="healthProviderValue">—</strong></div><div><span>Sessions</span><strong id="healthSessionsValue">—</strong></div><div><span>Authentication</span><strong id="healthAuthValue">—</strong></div></div>
+              <div class="diagnostic-row"><span>Raw response</span><button class="text-btn" id="copyHealthBtn" type="button"><svg class="icon"><use href="#icon-copy"></use></svg>Copy</button></div>
+              <pre class="code-block" id="healthOut">Run a connection test to inspect the server response.</pre>
+            </section>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>
