@@ -1,11 +1,23 @@
 """Smoke tests for the frontend static site."""
 
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app, _FRONTEND_DIR, _sessions, _teams
+
+
+class _IdCollector(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.ids = []
+
+    def handle_starttag(self, _tag, attrs):
+        attributes = dict(attrs)
+        if "id" in attributes:
+            self.ids.append(attributes["id"])
 
 
 def test_frontend_files_exist():
@@ -49,3 +61,31 @@ def test_static_assets(client):
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "api/chat" in js.text
+    assert "/api/chat/stream" in js.text
+
+
+def test_frontend_workspace_controls_are_present(client):
+    html = client.get("/").text
+    for view in ("chat", "team", "test", "plugins", "settings"):
+        assert f'id="view-{view}"' in html
+        assert f'data-view="{view}"' in html
+
+    for control in (
+        "mobileMenuBtn",
+        "themeToggle",
+        "newSessionBtn",
+        "pluginSearch",
+        "pluginFilter",
+        "healthStatusValue",
+    ):
+        assert f'id="{control}"' in html
+
+    assert 'aria-live="polite"' in html
+    assert 'class="skip-link"' in html
+
+
+def test_frontend_has_unique_element_ids(client):
+    parser = _IdCollector()
+    parser.feed(client.get("/").text)
+    assert parser.ids
+    assert len(parser.ids) == len(set(parser.ids))
