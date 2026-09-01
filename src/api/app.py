@@ -20,7 +20,7 @@ from src.agent.controller import AgentController, create_agent
 from src.agent.orchestrator import MultiAgentOrchestrator, create_team
 from src.agent.tester import TestingAgent
 from src.api.auth import api_keys_configured, require_api_key
-from src.api.session_store import SessionStore, is_valid_session_id
+from src.api.session_store import create_session_store, is_valid_session_id
 from src.plugins.registry import create_default_registry
 
 load_dotenv()
@@ -47,7 +47,7 @@ def _max_teams() -> int:
 # OrderedDict used as simple LRU: move_to_end on access; popitem(last=False) on overflow
 _sessions: OrderedDict[str, AgentController] = OrderedDict()
 _teams: OrderedDict[str, MultiAgentOrchestrator] = OrderedDict()
-_store = SessionStore()
+_store = create_session_store()
 _plugins = create_default_registry()
 
 
@@ -175,7 +175,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="AutoCraft Dashboard API",
         description="Web API for the AutoCraft agent framework",
-        version="0.6.0",
+        version="0.7.0",
     )
 
     raw_origins = os.getenv("AUTOCRAFT_CORS_ORIGINS", "*").strip()
@@ -194,6 +194,7 @@ def create_app() -> FastAPI:
 
     @application.get("/health")
     def health() -> dict:
+        backend = getattr(_store, "backend_name", os.getenv("AUTOCRAFT_SESSION_BACKEND", "json"))
         return {
             "status": "ok",
             "provider": os.getenv("AUTOCRAFT_PROVIDER", "gemini"),
@@ -201,6 +202,7 @@ def create_app() -> FastAPI:
             "teams": len(_teams),
             "auth_required": api_keys_configured(),
             "persistent_sessions": True,
+            "session_backend": backend,
         }
 
     @application.get("/api/providers", dependencies=auth_dep)

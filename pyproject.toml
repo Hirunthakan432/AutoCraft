@@ -1,6 +1,6 @@
 [project]
 name = "autocraft"
-version = "0.6.0"
+version = "0.7.0"
 description = "An intelligent AI agent framework for automated software development workflows."
 requires-python = ">=3.10"
 
