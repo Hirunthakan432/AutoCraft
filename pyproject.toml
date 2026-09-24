@@ -13,3 +13,6 @@ line-length = 88
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.vercel]
+entrypoint = "src.api:app"
