@@ -97,6 +97,8 @@ def validate_command(command: str) -> list[str]:
     if not args:
         raise ValueError("Command must be a non-empty string")
 
+    if "/" in args[0] or "\\\\" in args[0]:
+        raise PermissionError("Executable paths are not accepted; use an approved command name")
     executable = Path(args[0]).name.lower()
     if executable in BLOCKED_EXECUTABLES:
         raise PermissionError(f"Executable '{executable}' is blocked by sandbox policy")
