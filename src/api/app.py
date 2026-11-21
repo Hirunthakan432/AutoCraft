@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from src.agent.controller import AgentController, create_agent
 from src.agent.orchestrator import MultiAgentOrchestrator, create_team
 from src.agent.tester import TestingAgent
-from src.api.auth import api_keys_configured, require_api_key
+from src.api.auth import auth_required, require_api_key
 from src.api.session_store import create_session_store, is_valid_session_id
 from src.plugins.registry import create_default_registry
 
@@ -200,7 +200,7 @@ def create_app() -> FastAPI:
             "provider": os.getenv("AUTOCRAFT_PROVIDER", "gemini"),
             "sessions": len(_sessions),
             "teams": len(_teams),
-            "auth_required": api_keys_configured(),
+            "auth_required": auth_required(),
             "persistent_sessions": True,
             "session_backend": backend,
         }
