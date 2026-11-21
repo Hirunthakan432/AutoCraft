@@ -10,7 +10,7 @@ from __future__ import annotations
 import functools
 from typing import Any, Callable, Iterable
 
-from src.security.command_policy import validate_command
+from src.security.command_policy import BLOCKED_COMMAND_PATTERNS, validate_command
 
 
 class ToolSandbox:
