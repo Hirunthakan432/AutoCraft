@@ -1,8 +1,12 @@
+"""Workspace-scoped file tools and policy-checked command execution."""
+
+from __future__ import annotations
+
 import os
-import shlex
 import subprocess
 from pathlib import Path
-from typing import List
+
+from src.security.command_policy import sanitized_environment, validate_command
 
 
 def _workspace_root() -> Path:
@@ -16,10 +20,10 @@ def _safe_path(path: str) -> Path:
     candidate = (root / path).resolve()
     try:
         candidate.relative_to(root)
-    except ValueError as e:
+    except ValueError as exc:
         raise PermissionError(
             f"Path '{path}' is outside the allowed workspace ({root})."
-        ) from e
+        ) from exc
     return candidate
 
 
@@ -31,10 +35,10 @@ def list_files(directory: str = ".") -> str:
             return f"Error: '{directory}' is not a directory."
         items = sorted(os.listdir(target))
         return f"Contents of '{directory}':\n" + "\n".join(f"- {item}" for item in items)
-    except PermissionError as e:
-        return str(e)
-    except Exception as e:
-        return f"Error listing directory '{directory}': {e}"
+    except PermissionError as exc:
+        return str(exc)
+    except Exception as exc:
+        return f"Error listing directory '{directory}': {exc}"
 
 
 def read_file(file_path: str) -> str:
@@ -43,13 +47,13 @@ def read_file(file_path: str) -> str:
         target = _safe_path(file_path)
         if not target.is_file():
             return f"Error: File '{file_path}' does not exist or is not a regular file."
-        with open(target, "r", encoding="utf-8") as f:
-            content = f.read()
+        with target.open("r", encoding="utf-8") as file:
+            content = file.read()
         return f"--- Content of {file_path} ---\n{content}\n--- End of File ---"
-    except PermissionError as e:
-        return str(e)
-    except Exception as e:
-        return f"Error reading file '{file_path}': {e}"
+    except PermissionError as exc:
+        return str(exc)
+    except Exception as exc:
+        return f"Error reading file '{file_path}': {exc}"
 
 
 def write_file(file_path: str, content: str) -> str:
@@ -57,39 +61,43 @@ def write_file(file_path: str, content: str) -> str:
     try:
         target = _safe_path(file_path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(content)
+        with target.open("w", encoding="utf-8") as file:
+            file.write(content)
         return f"Successfully wrote {len(content)} bytes to '{file_path}'."
-    except PermissionError as e:
-        return str(e)
-    except Exception as e:
-        return f"Error writing to file '{file_path}': {e}"
+    except PermissionError as exc:
+        return str(exc)
+    except Exception as exc:
+        return f"Error writing to file '{file_path}': {exc}"
 
 
 def run_command(command: str) -> str:
-    """Runs a shell command safely within the current workspace (no shell injection)."""
-    try:
-        args: List[str] = shlex.split(command)
-        if not args:
-            return "Error: Empty command."
+    """Run an allow-listed argv command in the workspace without invoking a shell.
 
+    The process receives a filtered environment and a hard timeout. This remains
+    a policy layer, not a substitute for OS/container isolation.
+    """
+    try:
+        args = validate_command(command)
         result = subprocess.run(
             args,
             shell=False,
             cwd=str(_workspace_root()),
+            env=sanitized_environment(),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
-        out = f"Exit Code: {result.returncode}\n"
-        if stdout:
-            out += f"STDOUT:\n{stdout}\n"
-        if stderr:
-            out += f"STDERR:\n{stderr}\n"
-        return out
+        output = f"Exit Code: {result.returncode}\n"
+        if result.stdout.strip():
+            output += f"STDOUT:\n{result.stdout.strip()}\n"
+        if result.stderr.strip():
+            output += f"STDERR:\n{result.stderr.strip()}\n"
+        return output
     except subprocess.TimeoutExpired:
         return "Error: Command execution timed out after 30 seconds."
-    except Exception as e:
-        return f"Error running command '{command}': {e}"
+    except (PermissionError, ValueError) as exc:
+        return f"Sandbox denied: {exc}"
+    except Exception as exc:
+        return f"Error running command '{command}': {exc}"
