@@ -1,58 +1,23 @@
 """Tool execution safety layer for AutoCraft.
 
-Provides an allow-list based sandbox that:
-- Only permits explicitly registered tools
-- Blocks dangerous shell commands
-- Can wrap callables for use with the Gemini SDK
+Provides an explicit tool allow-list and applies the shared command policy to
+run_command. This is not an OS-level sandbox; untrusted code should run inside
+a dedicated, least-privilege container.
 """
 
 from __future__ import annotations
 
 import functools
-import re
 from typing import Any, Callable, Iterable
 
-# Patterns that must never reach subprocess (case-insensitive).
-# Matched against the full command string before shlex splitting.
-BLOCKED_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(p, re.IGNORECASE)
-    for p in (
-        r"\brm\s+(-[a-zA-Z]*[rf]|.*\s-[rf]|--force|--recursive)",  # rm -rf / recursive / force
-        r"\bsudo\b",
-        r"\bchmod\b",
-        r"\bchown\b",
-        r"\bmkfs\b",
-        r"\bdd\s+if=",
-        r">\s*/dev/",
-        r"\bcurl\b.*\|\s*(ba)?sh",
-        r"\bwget\b.*\|\s*(ba)?sh",
-        r"\beval\b",
-        r"\bexec\b\s",
-        r"\bshutdown\b",
-        r"\breboot\b",
-        r"\bpoweroff\b",
-        r"\bkill\s+-9\b",
-        r"\bpkill\b",
-        r"\b:(){:|:&};:",  # fork bomb
-        r"\bformat\b",
-        r"\bfdisk\b",
-        r"\bparted\b",
-    )
-)
+from src.security.command_policy import validate_command
 
 
 class ToolSandbox:
-    """Allow-list tool executor with optional command policy for shell tools."""
+    """Allow-list tool executor with command policy for shell tools."""
 
-    def __init__(
-        self,
-        *,
-        blocked_patterns: Iterable[re.Pattern[str]] | None = None,
-    ) -> None:
+    def __init__(self) -> None:
         self.allowed_tools: dict[str, Callable[..., Any]] = {}
-        self.blocked_patterns = (
-            tuple(blocked_patterns) if blocked_patterns is not None else BLOCKED_COMMAND_PATTERNS
-        )
 
     def register(self, name: str, tool: Callable[..., Any]) -> None:
         """Register a tool under an explicit name."""
@@ -73,33 +38,19 @@ class ToolSandbox:
     def list_allowed(self) -> list[str]:
         return sorted(self.allowed_tools.keys())
 
-    def _check_command_policy(self, command: str) -> None:
-        """Raise PermissionError if the command matches a blocked pattern."""
-        for pattern in self.blocked_patterns:
-            if pattern.search(command):
-                raise PermissionError(
-                    f"Command blocked by sandbox policy: matches '{pattern.pattern}'"
-                )
-
     def execute(self, name: str, *args: Any, **kwargs: Any) -> Any:
-        """Run a registered tool. Applies command policy for run_command."""
+        """Run a registered tool; validate commands before invoking run_command."""
         if name not in self.allowed_tools:
             raise PermissionError(f"Tool '{name}' is not allowed")
 
-        if name == "run_command" and args:
-            self._check_command_policy(str(args[0]))
-        elif name == "run_command" and "command" in kwargs:
-            self._check_command_policy(str(kwargs["command"]))
+        if name == "run_command":
+            command = args[0] if args else kwargs.get("command")
+            validate_command(command)
 
         return self.allowed_tools[name](*args, **kwargs)
 
     def wrap(self, name: str) -> Callable[..., Any]:
-        """Return a Gemini-SDK-compatible wrapper that executes via this sandbox.
-
-        The wrapper uses the *registered* name (not the underlying callable's
-        __name__) so lambdas and renamed tools still expose a stable identity
-        to the model.
-        """
+        """Return a Gemini-SDK-compatible wrapper that executes via this sandbox."""
         if name not in self.allowed_tools:
             raise KeyError(f"Tool '{name}' is not registered")
 
@@ -109,10 +60,9 @@ class ToolSandbox:
         def sandboxed_tool(*args: Any, **kwargs: Any) -> Any:
             try:
                 return self.execute(name, *args, **kwargs)
-            except PermissionError as e:
-                return f"Sandbox denied: {e}"
+            except PermissionError as exc:
+                return f"Sandbox denied: {exc}"
 
-        # Prefer the registration name over original.__name__ (e.g. <lambda>)
         sandboxed_tool.__name__ = name
         sandboxed_tool.__qualname__ = name
         if original.__doc__:
@@ -122,7 +72,7 @@ class ToolSandbox:
     def wrapped_tools(self, names: Iterable[str] | None = None) -> list[Callable[..., Any]]:
         """Return wrapped callables for the given names (or all registered tools)."""
         target = list(names) if names is not None else self.list_allowed()
-        return [self.wrap(n) for n in target]
+        return [self.wrap(name) for name in target]
 
 
 def create_default_sandbox() -> ToolSandbox:
